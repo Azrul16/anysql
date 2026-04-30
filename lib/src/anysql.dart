@@ -5,6 +5,10 @@ import 'anysql_exception.dart';
 
 /// Entry point for opening database connections through an AnySQL driver.
 final class AnySql {
+  /// Creates a client with an optional ordered list of [drivers].
+  ///
+  /// When [open] is called, the first driver that reports support for the
+  /// supplied config is used.
   AnySql([Iterable<AnySqlDriver> drivers = const []])
     : _drivers = List<AnySqlDriver>.of(drivers);
 

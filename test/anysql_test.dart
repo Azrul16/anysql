@@ -7,7 +7,7 @@ void main() {
       host: 'localhost',
       database: 'app',
       username: 'user',
-      password: 'secret',
+      password: 'test-password',
     );
     final driver = _FakeDriver(AnySqlDialect.postgres);
 
@@ -78,11 +78,11 @@ void main() {
     final config = AnySqlConfig.postgres(
       host: 'localhost',
       database: 'app',
-      password: 'secret',
+      password: 'test-password',
     );
 
     expect(config.toString(), contains('password: ***'));
-    expect(config.toString(), isNot(contains('secret')));
+    expect(config.toString(), isNot(contains('test-password')));
   });
 
   test('config equality and hash code ignore option insertion order', () {

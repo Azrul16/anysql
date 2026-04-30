@@ -1,3 +1,4 @@
+/// Unified database contracts and setup helpers for SQL and NoSQL drivers.
 library;
 
 export 'src/anysql.dart';

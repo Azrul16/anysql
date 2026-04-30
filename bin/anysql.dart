@@ -57,13 +57,7 @@ void _configure(List<String> arguments) {
     return;
   }
 
-  final password = args.value('password');
   final passwordEnvironmentKey = args.value('password-env');
-  if (password != null && passwordEnvironmentKey != null) {
-    stderr.writeln('Use either --password or --password-env, not both.');
-    exitCode = 64;
-    return;
-  }
 
   final port = args.value('port') == null
       ? null
@@ -125,7 +119,6 @@ void _configure(List<String> arguments) {
     port: port,
     database: database,
     username: args.value('username'),
-    password: password,
     passwordEnvironmentKey: passwordEnvironmentKey,
     sslEnabled: args.has('ssl'),
     backendUrl: backendUrl,
@@ -167,7 +160,6 @@ Options:
   --port          Database port.
   --database      Database name or sqlite path. Required.
   --username      Database username.
-  --password      Inline password. Avoid committing generated secrets.
   --password-env  Dart define key for the password, for example ANYSQL_PASSWORD.
   --ssl           Enable SSL in the generated config.
   --backend-url   Optional backend API URL for mobile/web apps.
@@ -240,7 +232,6 @@ const _knownConfigureOptions = {
   'help',
   'host',
   'output',
-  'password',
   'password-env',
   'port',
   'ssl',

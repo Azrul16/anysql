@@ -6,6 +6,7 @@ import 'anysql_driver.dart';
 
 /// App-level connection options, similar in spirit to Firebase options files.
 final class AnySqlOptions {
+  /// Creates app-level connection options.
   AnySqlOptions({
     required this.config,
     this.backendUri,

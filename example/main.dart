@@ -1,23 +1,38 @@
 import 'package:anysql/anysql.dart';
 
 Future<void> main() async {
-  final config = AnySqlConfig.postgres(
-    host: 'localhost',
-    database: 'app',
-    username: 'postgres',
-    password: const String.fromEnvironment('ANYSQL_PASSWORD'),
+  final options = AnySqlOptions(
+    config: AnySqlConfig.postgres(
+      host: 'localhost',
+      database: 'app',
+      username: 'postgres',
+      password: const String.fromEnvironment('ANYSQL_PASSWORD'),
+    ),
+    backendUri: Uri.parse('https://api.example.com/anysql'),
+    backendHeaders: const {'x-client': 'anysql-example'},
   );
 
-  final anySql = AnySql([ExamplePostgresDriver()]);
-  final connection = await anySql.open(config);
-
-  final result = await connection.query(
+  final directConnection = await options.connect(
+    driver: ExamplePostgresDriver(),
+  );
+  final directResult = await directConnection.query(
     'select * from users where id = @id',
     parameters: {'id': 1},
   );
 
-  print(result.firstOrNull);
-  await connection.close();
+  print('Direct result: ${directResult.firstOrNull}');
+  await directConnection.close();
+
+  final backendConnection = await options.connectBackend(
+    client: ExampleBackendClient(),
+  );
+  final backendResult = await backendConnection.query(
+    'users.findById',
+    parameters: {'id': 1},
+  );
+
+  print('Backend result: ${backendResult.firstOrNull}');
+  await backendConnection.close();
 }
 
 final class ExamplePostgresDriver extends AnySqlDriverBase {
@@ -26,11 +41,25 @@ final class ExamplePostgresDriver extends AnySqlDriverBase {
   @override
   Future<AnySqlConnection> connect(AnySqlConfig config) async {
     checkSupported(config);
-    return _ExampleConnection();
+    return _ExampleConnection(source: 'direct');
+  }
+}
+
+final class ExampleBackendClient implements AnySqlBackendClient {
+  @override
+  Future<AnySqlConnection> connect(AnySqlOptions options) async {
+    if (!options.hasBackend) {
+      throw const AnySqlException('Backend URL is required.');
+    }
+
+    return _ExampleConnection(source: options.backendUri.toString());
   }
 }
 
 final class _ExampleConnection implements AnySqlConnection {
+  _ExampleConnection({required this.source});
+
+  final String source;
   var _isOpen = true;
 
   @override
@@ -47,7 +76,7 @@ final class _ExampleConnection implements AnySqlConnection {
     Map<String, Object?> parameters = const {},
   }) async {
     return AnySqlResult.rows([
-      {'statement': statement, 'parameters': parameters},
+      {'source': source, 'statement': statement, 'parameters': parameters},
     ]);
   }
 
@@ -55,6 +84,6 @@ final class _ExampleConnection implements AnySqlConnection {
   Future<T> transaction<T>(
     Future<T> Function(AnySqlTransaction transaction) action,
   ) {
-    throw UnsupportedError('Example driver does not implement transactions.');
+    throw UnsupportedError('Example connection does not support transactions.');
   }
 }

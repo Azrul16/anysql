@@ -36,7 +36,7 @@ dart run anysql configure \
   --username postgres \
   --password-env ANYSQL_PASSWORD \
   --backend-url https://api.example.com/anysql \
-  --backend-header x-api-key=dev-key
+  --backend-header x-client=anysql-example
 ```
 
 This creates `lib/anysql_options.dart`, similar to Firebase options:
@@ -61,7 +61,13 @@ final connection = await DefaultAnySqlOptions.connectBackend(
 Pass the password with Dart defines instead of committing secrets:
 
 ```sh
-flutter run --dart-define=ANYSQL_PASSWORD=secret
+flutter run --dart-define=ANYSQL_PASSWORD=your_password
+```
+
+For a Dart CLI or server app, pass the same value with:
+
+```sh
+dart -DANYSQL_PASSWORD=your_password run
 ```
 
 You can still configure connections manually:
@@ -73,7 +79,7 @@ final config = AnySqlConfig.postgres(
   host: 'localhost',
   database: 'app',
   username: 'postgres',
-  password: 'secret',
+  password: const String.fromEnvironment('ANYSQL_PASSWORD'),
 );
 
 final connection = await AnySql.connect(
