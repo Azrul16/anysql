@@ -38,7 +38,7 @@ void main() {
         username: 'admin',
         passwordEnvironmentKey: 'ANYSQL_PASSWORD',
         backendUrl: 'https://api.example.com/anysql',
-        backendHeaders: {'x-api-key': 'test-key'},
+        backendHeaders: {'x-client': 'anysql-test'},
       ),
     );
 
@@ -52,9 +52,27 @@ void main() {
       contains("password: const String.fromEnvironment('ANYSQL_PASSWORD')"),
     );
     expect(contents, contains("Uri.parse('https://api.example.com/anysql')"));
-    expect(contents, contains("'x-api-key': 'test-key'"));
+    expect(contents, contains("'x-client': 'anysql-test'"));
     expect(contents, contains('connectBackend'));
     expect(contents, isNot(contains('password: null')));
+  });
+
+  test('generator escapes dart string literal content', () {
+    final contents = generateAnySqlOptionsFile(
+      const AnySqlSetupInput(
+        dialect: AnySqlDialect.sqlite,
+        database: r"data/$tenant's-app.db",
+        backendUrl: 'https://api.example.com/tenant/\$tenant',
+        backendHeaders: {'x-note': "owner's\nworkspace"},
+      ),
+    );
+
+    expect(contents, contains(r"database: 'data/\$tenant\'s-app.db'"));
+    expect(
+      contents,
+      contains(r"Uri.parse('https://api.example.com/tenant/\$tenant')"),
+    );
+    expect(contents, contains(r"'x-note': 'owner\'s\nworkspace'"));
   });
 }
 

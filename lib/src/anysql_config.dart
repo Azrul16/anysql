@@ -4,10 +4,26 @@ import 'anysql_exception.dart';
 import 'anysql_value.dart';
 
 /// Known database families supported by the AnySQL abstraction.
-enum AnySqlDialect { postgres, mysql, sqlite, mongodb, custom }
+enum AnySqlDialect {
+  /// PostgreSQL-compatible relational database.
+  postgres,
+
+  /// MySQL-compatible relational database.
+  mysql,
+
+  /// SQLite-compatible local relational database.
+  sqlite,
+
+  /// MongoDB-compatible document database.
+  mongodb,
+
+  /// Driver-specific database family.
+  custom,
+}
 
 /// Connection settings passed to an [AnySqlDriver].
 final class AnySqlConfig {
+  /// Creates raw database connection settings for a driver.
   AnySqlConfig({
     required this.dialect,
     this.host,
@@ -91,15 +107,37 @@ final class AnySqlConfig {
          options: options,
        );
 
+  /// Database family this config targets.
   final AnySqlDialect dialect;
+
+  /// Hostname or IP address for networked databases.
   final String? host;
+
+  /// TCP port for networked databases.
   final int? port;
+
+  /// Database name, schema, or SQLite path, depending on the dialect.
   final String? database;
+
+  /// Optional database username.
   final String? username;
+
+  /// Optional database password.
+  ///
+  /// Prefer generated configs that read this value from
+  /// `String.fromEnvironment` instead of committing credentials.
   final String? password;
+
+  /// Whether the driver should request an encrypted connection.
   final bool sslEnabled;
+
+  /// Driver-specific options that do not fit the shared config model.
   final Map<String, Object?> options;
 
+  /// Creates a copy with selected values replaced.
+  ///
+  /// Nullable fields use [AnySqlValue] so callers can distinguish between
+  /// leaving a value unchanged and intentionally setting it to `null`.
   AnySqlConfig copyWith({
     AnySqlDialect? dialect,
     AnySqlValue<String?>? host,

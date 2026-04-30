@@ -10,6 +10,14 @@ topics:
   - cli
   - configuration
 
+platforms:
+  android:
+  ios:
+  linux:
+  macos:
+  web:
+  windows:
+
 environment:
   sdk: ^3.11.4
 

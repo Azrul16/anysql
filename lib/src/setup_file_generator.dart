@@ -90,7 +90,39 @@ String _configConstructor(AnySqlSetupInput input) {
 }
 
 String _escape(String value) {
-  return value.replaceAll(r'\', r'\\').replaceAll("'", r"\'");
+  final buffer = StringBuffer();
+
+  for (final codeUnit in value.codeUnits) {
+    switch (codeUnit) {
+      case 0x08:
+        buffer.write(r'\b');
+      case 0x09:
+        buffer.write(r'\t');
+      case 0x0A:
+        buffer.write(r'\n');
+      case 0x0B:
+        buffer.write(r'\v');
+      case 0x0C:
+        buffer.write(r'\f');
+      case 0x0D:
+        buffer.write(r'\r');
+      case 0x24:
+        buffer.write(r'\$');
+      case 0x27:
+        buffer.write(r"\'");
+      case 0x5C:
+        buffer.write(r'\\');
+      default:
+        if (codeUnit < 0x20) {
+          buffer.write(r'\x');
+          buffer.write(codeUnit.toRadixString(16).padLeft(2, '0'));
+        } else {
+          buffer.writeCharCode(codeUnit);
+        }
+    }
+  }
+
+  return buffer.toString();
 }
 
 String _stringMapLiteral(Map<String, String> values) {

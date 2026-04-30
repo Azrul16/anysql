@@ -16,11 +16,13 @@ abstract interface class AnySqlDriver {
 
 /// Helpful base class for concrete drivers.
 abstract base class AnySqlDriverBase implements AnySqlDriver {
+  /// Creates a base driver for [dialect] with a human-readable [name].
   const AnySqlDriverBase(this.name, this.dialect);
 
   @override
   final String name;
 
+  /// Database dialect this driver supports by default.
   final AnySqlDialect dialect;
 
   @override
