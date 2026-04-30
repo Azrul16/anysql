@@ -7,6 +7,8 @@ void main(List<String> arguments) {
   final command = arguments.isEmpty ? 'help' : arguments.first;
 
   switch (command) {
+    case 'init':
+      _init(arguments.skip(1).toList());
     case 'configure':
       _configure(arguments.skip(1).toList());
     case 'help':
@@ -17,6 +19,46 @@ void main(List<String> arguments) {
       stderr.writeln('Unknown command: $command');
       _printHelp();
       exitCode = 64;
+  }
+}
+
+void _init(List<String> arguments) {
+  final args = _Args(arguments);
+  final unknownOptions = args.unknownOptions(_knownInitOptions);
+  if (unknownOptions.isNotEmpty) {
+    stderr.writeln('Unknown option: ${unknownOptions.first}');
+    exitCode = 64;
+    return;
+  }
+
+  if (args.has('help')) {
+    _printHelp();
+    return;
+  }
+
+  final className = args.value('class-name') ?? 'AnySqlOptionsFile';
+  if (!_isValidDartClassName(className)) {
+    stderr.writeln('Invalid --class-name value: $className');
+    exitCode = 64;
+    return;
+  }
+
+  final output = args.value('output') ?? 'lib/anysql_options.dart';
+  final outputFile = File(output);
+  if (outputFile.existsSync() && !args.has('force')) {
+    stderr.writeln('$output already exists. Re-run with --force to overwrite.');
+    exitCode = 73;
+    return;
+  }
+
+  try {
+    final contents = generateAnySqlSampleOptionsFile(className: className);
+    outputFile.parent.createSync(recursive: true);
+    outputFile.writeAsStringSync(contents);
+    stdout.writeln('Created $output');
+  } on Object catch (error) {
+    stderr.writeln('Failed to create sample options file: $error');
+    exitCode = 1;
   }
 }
 
@@ -152,6 +194,7 @@ void _printHelp() {
 anysql
 
 Usage:
+  dart run anysql init
   dart run anysql configure --dialect postgres --host localhost --database app
 
 Options:
@@ -165,8 +208,14 @@ Options:
   --backend-url   Optional backend API URL for mobile/web apps.
   --backend-header Optional backend header in Name=Value format. Repeatable.
   --output        Output file. Defaults to lib/anysql_options.dart.
-  --class-name    Generated class name. Defaults to DefaultAnySqlOptions.
+  --class-name    Generated class name.
+                  Defaults to AnySqlOptionsFile for init.
+                  Defaults to DefaultAnySqlOptions for configure.
   --force         Overwrite the output file if it already exists.
+
+Init command:
+  Creates lib/anysql_options.dart with editable dummy configs for PostgreSQL,
+  MySQL, SQLite, and MongoDB.
 ''');
 }
 
@@ -237,6 +286,8 @@ const _knownConfigureOptions = {
   'ssl',
   'username',
 };
+
+const _knownInitOptions = {'class-name', 'force', 'help', 'output'};
 
 bool _isValidDartClassName(String value) {
   return RegExp(r'^[A-Z][A-Za-z0-9_]*$').hasMatch(value);

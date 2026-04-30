@@ -74,6 +74,28 @@ void main() {
     );
     expect(contents, contains(r"'x-note': 'owner\'s\nworkspace'"));
   });
+
+  test('sample generator creates options for every built-in database', () {
+    final contents = generateAnySqlSampleOptionsFile();
+
+    expect(contents, contains('final class AnySqlOptionsFile'));
+    expect(contents, contains('static AnySqlOptions get postgres'));
+    expect(contents, contains('AnySqlConfig.postgres'));
+    expect(contents, contains('ANYSQL_POSTGRES_PASSWORD'));
+    expect(contents, contains('static AnySqlOptions get mysql'));
+    expect(contents, contains('AnySqlConfig.mysql'));
+    expect(contents, contains('ANYSQL_MYSQL_PASSWORD'));
+    expect(contents, contains('static AnySqlOptions get sqlite'));
+    expect(contents, contains('AnySqlConfig.sqlite'));
+    expect(contents, contains('static AnySqlOptions get mongodb'));
+    expect(contents, contains('AnySqlConfig.mongodb'));
+    expect(contents, contains('ANYSQL_MONGODB_PASSWORD'));
+    expect(
+      contents,
+      contains('static Map<AnySqlDialect, AnySqlOptions> get all'),
+    );
+    expect(contents, contains('static AnySqlOptions byDialect'));
+  });
 }
 
 final class _FakeDriver extends AnySqlDriverBase {

@@ -13,3 +13,10 @@ dart -DANYSQL_PASSWORD=your_password run example/main.dart
 
 In a real app, replace `ExamplePostgresDriver` and `ExampleBackendClient` with
 database-specific packages that implement the `anysql` contracts.
+
+To generate an editable starter options file for all supported database
+families, run:
+
+```sh
+dart run anysql init
+```

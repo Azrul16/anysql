@@ -1,6 +1,6 @@
 name: anysql
 description: A unified Dart database abstraction and setup generator for SQL and NoSQL drivers.
-version: 0.1.0
+version: 0.1.1
 repository: https://github.com/Azrul16/anysql
 issue_tracker: https://github.com/Azrul16/anysql/issues
 topics:

@@ -1,3 +1,18 @@
+## 0.1.1
+
+### Added
+
+- Added `dart run anysql init` to generate a starter
+  `lib/anysql_options.dart` file with editable dummy options for PostgreSQL,
+  MySQL, SQLite, and MongoDB.
+- Added `AnySqlOptionsFile.byDialect` to the generated starter file.
+
+### Fixed
+
+- Escaped generated Dart string literals more safely for values containing
+  dollar signs, quotes, and control characters.
+- Clarified CLI help text for `init` and `configure` class-name defaults.
+
 ## 0.1.0
 
 Initial public release of `anysql`.
