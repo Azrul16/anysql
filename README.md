@@ -26,7 +26,30 @@ packages can build on.
 
 ## Usage
 
-Generate an app options file:
+Create an editable options file with dummy values for every built-in database:
+
+```sh
+dart run anysql init
+```
+
+This creates `lib/anysql_options.dart` with sample PostgreSQL, MySQL, SQLite,
+and MongoDB configs. Edit the generated values for your app, then import it:
+
+```dart
+import 'anysql_options.dart';
+
+final connection = await AnySqlOptionsFile.postgres.connect(
+  driver: myPostgresDriver,
+);
+```
+
+You can also choose an options block by dialect:
+
+```dart
+final options = AnySqlOptionsFile.byDialect(AnySqlDialect.mysql);
+```
+
+Generate a custom one-database options file:
 
 ```sh
 dart run anysql configure \
@@ -39,7 +62,7 @@ dart run anysql configure \
   --backend-header x-client=anysql-example
 ```
 
-This creates `lib/anysql_options.dart`, similar to Firebase options:
+The `configure` command creates a smaller Firebase-style options file:
 
 ```dart
 import 'anysql_options.dart';
