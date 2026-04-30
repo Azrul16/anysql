@@ -7,7 +7,6 @@ final class AnySqlSetupInput {
     this.host,
     this.port,
     this.username,
-    this.password,
     this.passwordEnvironmentKey,
     this.sslEnabled = false,
     this.backendUrl,
@@ -20,7 +19,6 @@ final class AnySqlSetupInput {
   final String? host;
   final int? port;
   final String? username;
-  final String? password;
   final String? passwordEnvironmentKey;
   final bool sslEnabled;
   final String? backendUrl;
@@ -81,7 +79,6 @@ String _configConstructor(AnySqlSetupInput input) {
     if (input.port != null) 'port: ${input.port}',
     "database: '${_escape(input.database)}'",
     if (input.username != null) "username: '${_escape(input.username!)}'",
-    if (input.password != null) "password: '${_escape(input.password!)}'",
     if (input.passwordEnvironmentKey != null)
       "password: const String.fromEnvironment('${_escape(input.passwordEnvironmentKey!)}')",
     if (input.sslEnabled) 'sslEnabled: true',

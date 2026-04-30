@@ -61,7 +61,7 @@ final connection = await DefaultAnySqlOptions.connectBackend(
 Pass the password with Dart defines instead of committing secrets:
 
 ```sh
-flutter run --dart-define=ANYSQL_PASSWORD=secret
+flutter run --dart-define=ANYSQL_PASSWORD=your_password
 ```
 
 You can still configure connections manually:
@@ -73,7 +73,7 @@ final config = AnySqlConfig.postgres(
   host: 'localhost',
   database: 'app',
   username: 'postgres',
-  password: 'secret',
+  password: const String.fromEnvironment('ANYSQL_PASSWORD'),
 );
 
 final connection = await AnySql.connect(
