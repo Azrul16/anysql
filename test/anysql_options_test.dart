@@ -75,6 +75,54 @@ void main() {
     expect(contents, contains(r"'x-note': 'owner\'s\nworkspace'"));
   });
 
+  test('generator uses only valid sqlite constructor arguments', () {
+    final contents = generateAnySqlOptionsFile(
+      const AnySqlSetupInput(
+        dialect: AnySqlDialect.sqlite,
+        host: 'localhost',
+        port: 5432,
+        database: 'app.db',
+        username: 'admin',
+        passwordEnvironmentKey: 'ANYSQL_PASSWORD',
+        sslEnabled: true,
+      ),
+    );
+
+    expect(contents, contains('AnySqlConfig.sqlite'));
+    expect(contents, contains("database: 'app.db'"));
+    expect(contents, isNot(contains('host:')));
+    expect(contents, isNot(contains('port:')));
+    expect(contents, isNot(contains('username:')));
+    expect(contents, isNot(contains('password:')));
+    expect(contents, isNot(contains('sslEnabled:')));
+  });
+
+  test('generator creates valid custom dialect constructor', () {
+    final contents = generateAnySqlOptionsFile(
+      const AnySqlSetupInput(
+        dialect: AnySqlDialect.custom,
+        host: 'custom.example.com',
+        port: 9000,
+        database: 'app',
+        username: 'admin',
+        passwordEnvironmentKey: 'ANYSQL_PASSWORD',
+        sslEnabled: true,
+      ),
+    );
+
+    expect(contents, contains('AnySqlConfig('));
+    expect(contents, contains('dialect: AnySqlDialect.custom'));
+    expect(contents, contains("host: 'custom.example.com'"));
+    expect(contents, contains('port: 9000'));
+    expect(contents, contains("database: 'app'"));
+    expect(contents, contains("username: 'admin'"));
+    expect(
+      contents,
+      contains("password: const String.fromEnvironment('ANYSQL_PASSWORD')"),
+    );
+    expect(contents, contains('sslEnabled: true'));
+  });
+
   test('sample generator creates options for every built-in database', () {
     final contents = generateAnySqlSampleOptionsFile();
 

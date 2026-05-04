@@ -132,6 +132,10 @@ final class AnySqlConfig {
   final bool sslEnabled;
 
   /// Driver-specific options that do not fit the shared config model.
+  ///
+  /// Built-in drivers use this map sparingly. For example, the MySQL driver
+  /// reads `collation` and `timeoutMs`, while the MongoDB driver can read a
+  /// complete `uri`.
   final Map<String, Object?> options;
 
   /// Creates a copy with selected values replaced.

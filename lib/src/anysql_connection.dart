@@ -6,6 +6,10 @@ abstract interface class AnySqlConnection {
   bool get isOpen;
 
   /// Runs a statement or command and returns a normalized result.
+  ///
+  /// SQL drivers generally treat [statement] as SQL. Document database drivers
+  /// can define their own command naming convention, such as
+  /// `collection.operation`.
   Future<AnySqlResult> query(
     String statement, {
     Map<String, Object?> parameters = const {},

@@ -1,55 +1,140 @@
 # anysql
 
-`anysql` is a Dart and Flutter-friendly database abstraction for working with
-SQL and NoSQL backends through one consistent API.
+`anysql` is a small Dart database abstraction for projects that want one
+application-facing API for SQL, NoSQL, direct database drivers, and backend
+proxy connections.
 
-The package currently provides the core contracts for drivers, connections,
-transactions, configuration, normalized results, and exceptions. Concrete
-drivers for PostgreSQL, MySQL, SQLite, MongoDB, and other backends can
-implement the same interface without changing application code.
+Use it when you want your app code to work with `AnySqlConfig`,
+`AnySqlConnection`, `AnySqlResult`, and `AnySqlOptions` instead of being tightly
+coupled to PostgreSQL, MySQL, SQLite, MongoDB, or a custom data service.
 
-This package does not ship concrete database drivers yet. It gives you the
-shared contracts, generated setup file, and backend/proxy hook that driver
-packages can build on.
+> Important: direct database connections are for trusted Dart environments such
+> as CLIs, backend services, workers, and tests. Flutter mobile and web apps
+> should normally call a secure backend API instead of shipping production
+> database credentials inside the app.
 
-> For mobile and web apps, avoid connecting directly to production databases
-> with embedded credentials. Prefer a secure backend API or trusted proxy for
-> user-facing apps.
+## What This Package Includes
 
-## Features
+- A shared connection contract: `AnySqlConnection`.
+- A shared driver contract: `AnySqlDriver`.
+- Normalized query results: `AnySqlResult`.
+- Connection settings for PostgreSQL, MySQL, SQLite, MongoDB, and custom
+  backends: `AnySqlConfig`.
+- App-level options files: `AnySqlOptions`.
+- Built-in direct drivers:
+  - `PostgresAnySqlDriver`
+  - `MysqlAnySqlDriver`
+  - `SqliteAnySqlDriver`
+  - `MongodbAnySqlDriver`
+- CLI setup commands:
+  - `dart run anysql init`
+  - `dart run anysql configure`
 
-- One connection entry point with `AnySql.connect`.
-- Shared config model for PostgreSQL, MySQL, SQLite, MongoDB, and custom drivers.
-- Driver and connection interfaces for database-specific implementations.
-- Normalized `AnySqlResult` for rows, affected row counts, insert IDs, and metadata.
-- Transaction contract for drivers that support transactional work.
+## Install
 
-## Usage
+```sh
+dart pub add anysql
+```
 
-Create an editable options file with dummy values for every built-in database:
+For Flutter:
+
+```sh
+flutter pub add anysql
+```
+
+Import the core API:
+
+```dart
+import 'package:anysql/anysql.dart';
+```
+
+Import the built-in direct database drivers only when you need them:
+
+```dart
+import 'package:anysql/anysql_drivers.dart';
+```
+
+## Fastest Working Example
+
+SQLite can run in memory, so this example works without any external database
+server:
+
+```dart
+import 'package:anysql/anysql.dart';
+import 'package:anysql/anysql_drivers.dart';
+
+Future<void> main() async {
+  final connection = await AnySql.connect(
+    config: AnySqlConfig.sqlite(database: ':memory:'),
+    driver: const SqliteAnySqlDriver(),
+  );
+
+  try {
+    await connection.query(
+      'create table users (id integer primary key, email text not null)',
+    );
+
+    await connection.query(
+      'insert into users (email) values (?)',
+      parameters: {
+        'values': ['ada@example.com'],
+      },
+    );
+
+    final result = await connection.query('select id, email from users');
+    print(result.rows);
+  } finally {
+    await connection.close();
+  }
+}
+```
+
+SQLite positional parameters use the special `values` list.
+
+## Generate an Options File
+
+Create an editable options file with sample configs for PostgreSQL, MySQL,
+SQLite, and MongoDB:
 
 ```sh
 dart run anysql init
 ```
 
-This creates `lib/anysql_options.dart` with sample PostgreSQL, MySQL, SQLite,
-and MongoDB configs. Edit the generated values for your app, then import it:
+This creates:
+
+```text
+lib/anysql_options.dart
+```
+
+Use one generated config like this:
 
 ```dart
+import 'package:anysql/anysql.dart';
+import 'package:anysql/anysql_drivers.dart';
+
 import 'anysql_options.dart';
 
-final connection = await AnySqlOptionsFile.postgres.connect(
-  driver: myPostgresDriver,
-);
+Future<void> main() async {
+  final connection = await AnySqlOptionsFile.postgres.connect(
+    driver: const PostgresAnySqlDriver(),
+  );
+
+  try {
+    final result = await connection.query(
+      'select id, email from users where id = @id',
+      parameters: {'id': 1},
+    );
+
+    print(result.firstOrNull);
+  } finally {
+    await connection.close();
+  }
+}
 ```
 
-You can also choose an options block by dialect:
+## Configure One Database
 
-```dart
-final options = AnySqlOptionsFile.byDialect(AnySqlDialect.mysql);
-```
-
-Generate a custom one-database options file:
+Generate a smaller options file for one database:
 
 ```sh
 dart run anysql configure \
@@ -57,116 +142,288 @@ dart run anysql configure \
   --host localhost \
   --database app \
   --username postgres \
-  --password-env ANYSQL_PASSWORD \
-  --backend-url https://api.example.com/anysql \
-  --backend-header x-client=anysql-example
+  --password-env ANYSQL_PASSWORD
 ```
 
-The `configure` command creates a smaller Firebase-style options file:
-
-```dart
-import 'anysql_options.dart';
-
-final connection = await DefaultAnySqlOptions.connect(
-  driver: myPostgresDriver,
-);
-```
-
-For mobile or web apps, point the generated file at your backend and connect
-through a backend client:
-
-```dart
-final connection = await DefaultAnySqlOptions.connectBackend(
-  client: myBackendClient,
-);
-```
-
-Pass the password with Dart defines instead of committing secrets:
-
-```sh
-flutter run --dart-define=ANYSQL_PASSWORD=your_password
-```
-
-For a Dart CLI or server app, pass the same value with:
+Run your app with the password as a Dart define:
 
 ```sh
 dart -DANYSQL_PASSWORD=your_password run
 ```
 
-You can still configure connections manually:
+Flutter uses:
+
+```sh
+flutter run --dart-define=ANYSQL_PASSWORD=your_password
+```
+
+Then connect from trusted Dart code:
 
 ```dart
 import 'package:anysql/anysql.dart';
+import 'package:anysql/anysql_drivers.dart';
 
-final config = AnySqlConfig.postgres(
-  host: 'localhost',
-  database: 'app',
-  username: 'postgres',
-  password: const String.fromEnvironment('ANYSQL_PASSWORD'),
-);
+import 'anysql_options.dart';
 
-final connection = await AnySql.connect(
-  config: config,
-  driver: myPostgresDriver,
-);
+Future<void> main() async {
+  final connection = await DefaultAnySqlOptions.connect(
+    driver: const PostgresAnySqlDriver(),
+  );
 
-final result = await connection.query(
-  'select * from users where id = @id',
-  parameters: {'id': 1},
-);
-
-print(result.firstOrNull);
-
-await connection.close();
-```
-
-You can also register drivers once and let `anysql` pick the first compatible
-driver for a config:
-
-```dart
-final anySql = AnySql([
-  myPostgresDriver,
-  myMysqlDriver,
-]);
-
-final connection = await anySql.open(config);
-```
-
-## Creating a Driver
-
-```dart
-import 'package:anysql/anysql.dart';
-
-final class PostgresAnySqlDriver extends AnySqlDriverBase {
-  const PostgresAnySqlDriver() : super('postgres', AnySqlDialect.postgres);
-
-  @override
-  Future<AnySqlConnection> connect(AnySqlConfig config) async {
-    checkSupported(config);
-
-    // Create and return an AnySqlConnection backed by your PostgreSQL client.
-    throw UnimplementedError();
+  try {
+    final result = await connection.query('select now() as server_time');
+    print(result.firstOrNull);
+  } finally {
+    await connection.close();
   }
 }
 ```
 
-## Roadmap
+## Direct Connections
 
-- PostgreSQL driver package.
-- MySQL driver package.
-- SQLite driver package for local Flutter storage.
-- MongoDB-style document driver contract refinements.
-- Connection pooling helpers.
-- Safer mobile/web guidance and backend proxy examples.
+Direct connections are a good fit for Dart servers, command-line tools,
+background jobs, local scripts, and tests.
+
+```dart
+import 'package:anysql/anysql.dart';
+import 'package:anysql/anysql_drivers.dart';
+
+Future<void> main() async {
+  final config = AnySqlConfig.postgres(
+    host: 'localhost',
+    database: 'app',
+    username: 'postgres',
+    password: const String.fromEnvironment('ANYSQL_PASSWORD'),
+  );
+
+  final connection = await AnySql.connect(
+    config: config,
+    driver: const PostgresAnySqlDriver(),
+  );
+
+  try {
+    final users = await connection.query(
+      'select id, email from users where active = @active',
+      parameters: {'active': true},
+    );
+
+    for (final row in users.rows) {
+      print(row);
+    }
+  } finally {
+    await connection.close();
+  }
+}
+```
+
+## Flutter Mobile and Web
+
+Do not put production database usernames or passwords directly in Flutter
+mobile or web apps. Instead, keep the real database connection on your server
+and let the app call that server.
+
+`anysql` supports this with `AnySqlBackendClient`:
+
+```dart
+final connection = await DefaultAnySqlOptions.connectBackend(
+  client: myBackendClient,
+);
+
+final result = await connection.query(
+  'users.findById',
+  parameters: {'id': 1},
+);
+```
+
+Your backend client decides how to send the request, authenticate the user, and
+return an `AnySqlResult`.
+
+## Built-in Driver Notes
+
+## Driver Capability Matrix
+
+| Driver | Backing package | Best fit | Parameter style | Notes |
+| --- | --- | --- | --- | --- |
+| PostgreSQL | `postgres` | Dart servers, CLIs, workers | named `@id` parameters | Supports SSL through `sslEnabled` |
+| MySQL | `mysql_client` | Dart servers, CLIs, workers | `mysql_client` map parameters | `options` supports `collation` and `timeoutMs` |
+| SQLite | `sqlite3` | local native apps, CLIs, tests | positional `values` list | `:memory:` is ideal for tests and examples |
+| MongoDB | `mongo_dart` | Dart servers, CLIs, workers | document maps | Uses `collection.operation` statement names |
+
+The built-in direct drivers are intentionally thin adapters over established
+database packages. They normalize results and errors, but they do not hide the
+database engine or replace database-specific knowledge.
+
+### SQLite
+
+```dart
+final connection = await AnySql.connect(
+  config: AnySqlConfig.sqlite(database: ':memory:'),
+  driver: const SqliteAnySqlDriver(),
+);
+```
+
+Use `:memory:` for tests or pass a file path such as `app.sqlite`.
+
+### PostgreSQL
+
+```dart
+final connection = await AnySql.connect(
+  config: AnySqlConfig.postgres(
+    host: 'localhost',
+    database: 'app',
+    username: 'postgres',
+    password: const String.fromEnvironment('ANYSQL_PASSWORD'),
+  ),
+  driver: const PostgresAnySqlDriver(),
+);
+```
+
+PostgreSQL named parameters use the `@name` syntax from `package:postgres`.
+
+### MySQL
+
+```dart
+final connection = await AnySql.connect(
+  config: AnySqlConfig.mysql(
+    host: 'localhost',
+    database: 'app',
+    username: 'root',
+    password: const String.fromEnvironment('ANYSQL_PASSWORD'),
+  ),
+  driver: const MysqlAnySqlDriver(),
+);
+```
+
+MySQL parameter behavior follows `package:mysql_client`.
+
+### MongoDB
+
+```dart
+final connection = await AnySql.connect(
+  config: AnySqlConfig.mongodb(
+    host: 'localhost',
+    database: 'app',
+  ),
+  driver: const MongodbAnySqlDriver(),
+);
+
+final users = await connection.query(
+  'users.find',
+  parameters: {
+    'filter': {'active': true},
+  },
+);
+```
+
+MongoDB statements use `collection.operation` names. Supported operations are
+`find`, `findOne`, `insertOne`, `updateOne`, `deleteOne`, and `aggregate`.
+
+## Errors and Debugging
+
+Built-in drivers throw `AnySqlException` subclasses:
+
+- `AnySqlConfigException` for invalid or incomplete configuration.
+- `AnySqlDriverException` when no registered driver supports a config.
+- `AnySqlConnectionException` when a closed connection is used.
+- `AnySqlQueryException` when the underlying database package rejects a query.
+
+Query exceptions include a short statement preview but not parameter values, so
+logs are useful without accidentally printing secrets.
+
+## Register Multiple Drivers
+
+Register drivers when your app wants to choose the correct driver from a
+config:
+
+```dart
+final anySql = AnySql([
+  const PostgresAnySqlDriver(),
+  const MysqlAnySqlDriver(),
+  const SqliteAnySqlDriver(),
+  const MongodbAnySqlDriver(),
+]);
+
+final connection = await anySql.open(
+  AnySqlConfig.sqlite(database: ':memory:'),
+);
+```
+
+## CLI Reference
+
+Create starter options:
+
+```sh
+dart run anysql init
+```
+
+Overwrite an existing generated file:
+
+```sh
+dart run anysql init --force
+```
+
+Configure PostgreSQL:
+
+```sh
+dart run anysql configure --dialect postgres --host localhost --database app
+```
+
+Configure SQLite:
+
+```sh
+dart run anysql configure --dialect sqlite --database app.sqlite
+```
+
+SQLite uses only `--database`. Network options such as `--host`, `--port`,
+`--username`, `--password-env`, and `--ssl` are for networked databases.
+
+Show help:
+
+```sh
+dart run anysql --help
+```
+
+## Common Errors Users Hit
+
+- `PostgresAnySqlDriver` is not found: add
+  `import 'package:anysql/anysql_drivers.dart';`.
+- A Flutter app exposes credentials: move direct database access to a backend
+  service and use `AnySqlBackendClient` in the app.
+- SQLite insert parameters do not bind: pass positional values as
+  `parameters: {'values': [...]}`.
+- PostgreSQL parameters do not bind: use `@name` placeholders and pass a map
+  with the same names.
+- `dart run anysql configure --dialect sqlite --host ...` fails: SQLite does
+  not use network options.
+- A generated file already exists: re-run the command with `--force` only when
+  you really want to overwrite it.
+
+## More Documentation
+
+See [doc/driver_guide.md](doc/driver_guide.md) for a longer driver guide.
+
+See [example/main.dart](example/main.dart) for a runnable example that covers:
+
+- a fake direct PostgreSQL-style driver,
+- a fake backend/proxy client,
+- a real in-memory SQLite database.
 
 ## Reliability Notes
 
-- `AnySqlConfig` validates obvious invalid values like empty hosts and invalid
-  ports.
-- Passwords are masked in `AnySqlConfig.toString()`.
-- Generated options can read passwords from `String.fromEnvironment`, so secrets
-  do not need to be written into source files.
-- Config options and result rows are defensively copied so outside code cannot
-  mutate them after creation.
-- Drivers are explicit and swappable; `anysql` does not hide which backend
-  client is actually doing the database work.
+- `AnySqlConfig` validates required host, database, username, and port values.
+- `AnySqlConfig.toString()` masks passwords.
+- Generated configs can read passwords from `String.fromEnvironment`.
+- Config maps and result rows are defensively copied.
+- Drivers are explicit, so your app can see which database package is doing the
+  real work.
+
+## Author
+
+Created and maintained by Azrul Amaline.
+
+- GitHub: [Azrul16](https://github.com/Azrul16)
+- Repository: [github.com/Azrul16/anysql](https://github.com/Azrul16/anysql)
+
+## License
+
+`anysql` is released under the MIT License.
