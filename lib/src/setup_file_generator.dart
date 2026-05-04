@@ -153,17 +153,34 @@ final class $className {
 }
 
 String _configConstructor(AnySqlSetupInput input) {
-  final values = <String>[
-    if (input.host != null) "host: '${_escape(input.host!)}'",
-    if (input.port != null) 'port: ${input.port}',
-    "database: '${_escape(input.database)}'",
-    if (input.username != null) "username: '${_escape(input.username!)}'",
-    if (input.passwordEnvironmentKey != null)
-      "password: const String.fromEnvironment('${_escape(input.passwordEnvironmentKey!)}')",
-    if (input.sslEnabled) 'sslEnabled: true',
-  ];
+  final values = switch (input.dialect) {
+    AnySqlDialect.sqlite => <String>["database: '${_escape(input.database)}'"],
+    AnySqlDialect.custom => <String>[
+      'dialect: AnySqlDialect.custom',
+      if (input.host != null) "host: '${_escape(input.host!)}'",
+      if (input.port != null) 'port: ${input.port}',
+      "database: '${_escape(input.database)}'",
+      if (input.username != null) "username: '${_escape(input.username!)}'",
+      if (input.passwordEnvironmentKey != null)
+        "password: const String.fromEnvironment('${_escape(input.passwordEnvironmentKey!)}')",
+      if (input.sslEnabled) 'sslEnabled: true',
+    ],
+    _ => <String>[
+      if (input.host != null) "host: '${_escape(input.host!)}'",
+      if (input.port != null) 'port: ${input.port}',
+      "database: '${_escape(input.database)}'",
+      if (input.username != null) "username: '${_escape(input.username!)}'",
+      if (input.passwordEnvironmentKey != null)
+        "password: const String.fromEnvironment('${_escape(input.passwordEnvironmentKey!)}')",
+      if (input.sslEnabled) 'sslEnabled: true',
+    ],
+  };
 
-  return 'AnySqlConfig.${input.dialect.name}(\n'
+  final constructor = input.dialect == AnySqlDialect.custom
+      ? 'AnySqlConfig'
+      : 'AnySqlConfig.${input.dialect.name}';
+
+  return '$constructor(\n'
       '          ${values.join(',\n          ')},\n'
       '        )';
 }

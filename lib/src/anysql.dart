@@ -23,7 +23,7 @@ final class AnySql {
       (registered) => registered.name == driver.name,
     );
     if (existingIndex != -1) {
-      throw AnySqlException('Driver already registered: ${driver.name}.');
+      throw AnySqlDriverException('Driver already registered: ${driver.name}.');
     }
 
     _drivers.add(driver);
@@ -37,7 +37,7 @@ final class AnySql {
       }
     }
 
-    throw AnySqlException(
+    throw AnySqlDriverException(
       'No registered driver supports ${config.dialect.name} connections.',
     );
   }

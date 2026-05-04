@@ -98,6 +98,22 @@ void _configure(List<String> arguments) {
     exitCode = 64;
     return;
   }
+  if (dialect == AnySqlDialect.sqlite) {
+    final sqliteOnlyOptions = [
+      'host',
+      'port',
+      'username',
+      'password-env',
+      'ssl',
+    ].where(args.containsOption).toList();
+    if (sqliteOnlyOptions.isNotEmpty) {
+      stderr.writeln(
+        'Unsupported option for sqlite: --${sqliteOnlyOptions.first}',
+      );
+      exitCode = 64;
+      return;
+    }
+  }
 
   final passwordEnvironmentKey = args.value('password-env');
 
@@ -200,11 +216,13 @@ Usage:
 Options:
   --dialect       postgres, mysql, sqlite, or mongodb. Defaults to postgres.
   --host          Database host. Required except for sqlite.
-  --port          Database port.
+                  Not supported for sqlite.
+  --port          Database port. Not supported for sqlite.
   --database      Database name or sqlite path. Required.
-  --username      Database username.
+  --username      Database username. Not supported for sqlite.
   --password-env  Dart define key for the password, for example ANYSQL_PASSWORD.
-  --ssl           Enable SSL in the generated config.
+                  Not supported for sqlite.
+  --ssl           Enable SSL in the generated config. Not supported for sqlite.
   --backend-url   Optional backend API URL for mobile/web apps.
   --backend-header Optional backend header in Name=Value format. Repeatable.
   --output        Output file. Defaults to lib/anysql_options.dart.
@@ -268,6 +286,13 @@ final class _Args {
     }
 
     return unknown;
+  }
+
+  bool containsOption(String name) {
+    final prefix = '--$name=';
+    return _arguments.any(
+      (argument) => argument == '--$name' || argument.startsWith(prefix),
+    );
   }
 }
 
