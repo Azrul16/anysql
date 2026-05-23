@@ -4,7 +4,9 @@ import '../anysql_config.dart';
 import '../anysql_connection.dart';
 import '../anysql_driver.dart';
 import '../anysql_exception.dart';
+import '../anysql_parameters.dart';
 import '../anysql_result.dart';
+import 'driver_helpers.dart';
 
 /// Real SQLite driver backed by `package:sqlite3`.
 ///
@@ -67,7 +69,7 @@ final class SqliteAnySqlConnection implements AnySqlConnection {
       rethrow;
     } on Object catch (error) {
       throw AnySqlQueryException(
-        'Failed to execute SQLite query: ${_statementPreview(statement)}',
+        'Failed to execute SQLite query: ${statementPreview(statement)}',
         error,
       );
     }
@@ -138,7 +140,7 @@ final class _SqliteAnySqlTransaction implements AnySqlTransaction {
     } on Object catch (error) {
       throw AnySqlQueryException(
         'Failed to execute SQLite transaction query: '
-        '${_statementPreview(statement)}',
+        '${statementPreview(statement)}',
         error,
       );
     }
@@ -181,19 +183,10 @@ AnySqlResult _sqliteQuery(
 }
 
 List<Object?> _sqliteParameters(Map<String, Object?> parameters) {
-  final values = parameters['values'];
+  final values = parameters[AnySqlParameters.positionalValuesKey];
   if (values is Iterable<Object?>) {
     return values.toList();
   }
 
   return parameters.values.toList();
-}
-
-String _statementPreview(String statement) {
-  final compact = statement.trim().replaceAll(RegExp(r'\s+'), ' ');
-  if (compact.length <= 120) {
-    return compact;
-  }
-
-  return '${compact.substring(0, 117)}...';
 }

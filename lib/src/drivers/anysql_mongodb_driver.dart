@@ -5,6 +5,7 @@ import '../anysql_connection.dart';
 import '../anysql_driver.dart';
 import '../anysql_exception.dart';
 import '../anysql_result.dart';
+import 'driver_helpers.dart';
 
 /// Real MongoDB driver backed by `package:mongo_dart`.
 ///
@@ -36,8 +37,13 @@ final class MongodbAnySqlDriver extends AnySqlDriverBase {
 /// - `collection.find`
 /// - `collection.findOne`
 /// - `collection.insertOne`
+/// - `collection.insertMany`
 /// - `collection.updateOne`
+/// - `collection.updateMany`
+/// - `collection.replaceOne`
 /// - `collection.deleteOne`
+/// - `collection.deleteMany`
+/// - `collection.count`
 /// - `collection.aggregate`
 ///
 /// Operation arguments are passed through `parameters`, for example
@@ -85,7 +91,16 @@ final class MongodbAnySqlConnection implements AnySqlConnection {
           return AnySqlResult.command(
             affectedRows: result.nInserted,
             lastInsertId: document['_id'],
-            metadata: _document(result.document) ?? const {},
+            metadata: _writeMetadata(result),
+          );
+        case 'insertMany':
+          final result = await collection.insertMany(
+            _requiredDocuments(parameters, 'documents'),
+            ordered: parameters['ordered'] as bool?,
+          );
+          return AnySqlResult.command(
+            affectedRows: result.nInserted,
+            metadata: _writeMetadata(result),
           );
         case 'updateOne':
           final result = await collection.updateOne(
@@ -94,8 +109,28 @@ final class MongodbAnySqlConnection implements AnySqlConnection {
             upsert: parameters['upsert'] as bool?,
           );
           return AnySqlResult.command(
-            affectedRows: result.nModified,
-            metadata: _document(result.document) ?? const {},
+            affectedRows: result.nModified + result.nUpserted,
+            metadata: _writeMetadata(result),
+          );
+        case 'updateMany':
+          final result = await collection.updateMany(
+            _requiredDocument(parameters, 'filter'),
+            _requiredDocument(parameters, 'update'),
+            upsert: parameters['upsert'] as bool?,
+          );
+          return AnySqlResult.command(
+            affectedRows: result.nModified + result.nUpserted,
+            metadata: _writeMetadata(result),
+          );
+        case 'replaceOne':
+          final result = await collection.replaceOne(
+            _requiredDocument(parameters, 'filter'),
+            _requiredDocument(parameters, 'replacement'),
+            upsert: parameters['upsert'] as bool?,
+          );
+          return AnySqlResult.command(
+            affectedRows: result.nModified + result.nUpserted,
+            metadata: _writeMetadata(result),
           );
         case 'deleteOne':
           final result = await collection.deleteOne(
@@ -103,7 +138,15 @@ final class MongodbAnySqlConnection implements AnySqlConnection {
           );
           return AnySqlResult.command(
             affectedRows: result.nRemoved,
-            metadata: _document(result.document) ?? const {},
+            metadata: _writeMetadata(result),
+          );
+        case 'deleteMany':
+          final result = await collection.deleteMany(
+            _requiredDocument(parameters, 'filter'),
+          );
+          return AnySqlResult.command(
+            affectedRows: result.nRemoved,
+            metadata: _writeMetadata(result),
           );
         case 'aggregate':
           final pipeline = parameters['pipeline'];
@@ -116,6 +159,13 @@ final class MongodbAnySqlConnection implements AnySqlConnection {
               .aggregateToStream(_pipeline(pipeline))
               .toList();
           return AnySqlResult.rows(_mongoRows(rows));
+        case 'count':
+          final count = await collection.count(
+            _document(parameters['filter']) ?? _document(parameters),
+          );
+          return AnySqlResult.rows([
+            {'count': count},
+          ]);
         default:
           throw AnySqlException(
             'Unsupported MongoDB operation: ${parsed.operation}.',
@@ -125,7 +175,7 @@ final class MongodbAnySqlConnection implements AnySqlConnection {
       rethrow;
     } on Object catch (error) {
       throw AnySqlQueryException(
-        'Failed to execute MongoDB operation: ${_statementPreview(statement)}',
+        'Failed to execute MongoDB operation: ${statementPreview(statement)}',
         error,
       );
     }
@@ -135,8 +185,9 @@ final class MongodbAnySqlConnection implements AnySqlConnection {
   Future<T> transaction<T>(
     Future<T> Function(AnySqlTransaction transaction) action,
   ) {
-    throw UnsupportedError(
-      'MongoDB transactions are not exposed by this AnySQL driver yet.',
+    throw const AnySqlConnectionException(
+      'MongoDB transactions are not supported by this driver because '
+      'package:mongo_dart does not expose client sessions.',
     );
   }
 
@@ -166,6 +217,19 @@ final class _MongoStatement {
       operation: statement.substring(separator + 1),
     );
   }
+}
+
+Map<String, Object?> _writeMetadata(dynamic result) {
+  return {
+    'inserted': result.nInserted as int,
+    'matched': result.nMatched as int,
+    'modified': result.nModified as int,
+    'upserted': result.nUpserted as int,
+    'removed': result.nRemoved as int,
+    'acknowledged': result.isAcknowledged as bool,
+    'writeErrors': result.writeErrorsNumber as int,
+    'serverResponses': result.serverResponses as List<Map<String, dynamic>>,
+  };
 }
 
 String _mongoUri(AnySqlConfig config) {
@@ -210,6 +274,25 @@ Map<String, dynamic> _requiredDocument(
   return document;
 }
 
+List<Map<String, dynamic>> _requiredDocuments(
+  Map<String, Object?> parameters,
+  String key,
+) {
+  final values = parameters[key];
+  if (values is! Iterable) {
+    throw AnySqlException('MongoDB operation requires "$key" document list.');
+  }
+
+  return values.map((value) {
+    final document = _document(value);
+    if (document == null) {
+      throw AnySqlException('MongoDB "$key" entries must be maps.');
+    }
+
+    return document;
+  }).toList();
+}
+
 List<Map<String, Object>> _pipeline(List values) {
   return values.map((value) {
     final document = _document(value);
@@ -223,13 +306,4 @@ List<Map<String, Object>> _pipeline(List values) {
 
 List<Map<String, Object?>> _mongoRows(List<Map<String, dynamic>> rows) {
   return rows.map((row) => Map<String, Object?>.from(row)).toList();
-}
-
-String _statementPreview(String statement) {
-  final compact = statement.trim().replaceAll(RegExp(r'\s+'), ' ');
-  if (compact.length <= 120) {
-    return compact;
-  }
-
-  return '${compact.substring(0, 117)}...';
 }

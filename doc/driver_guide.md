@@ -17,10 +17,66 @@ Use the driver library when your app connects directly to a database:
 import 'package:anysql/anysql_drivers.dart';
 ```
 
-For Flutter mobile and web apps, prefer a backend/proxy connection instead of
-shipping production database credentials in the app bundle.
+For Flutter mobile apps, prefer a backend/proxy connection instead of shipping
+production database credentials in the app bundle. Browser/web support is not
+advertised while this package includes native direct-driver dependencies.
+
+## HTTP Backend Client
+
+Use `AnySqlHttpBackendClient` when your app should send database commands to a
+trusted HTTP API:
+
+```dart
+final connection = await DefaultAnySqlOptions.connectBackend(
+  client: AnySqlHttpBackendClient(),
+);
+
+final result = await connection.query(
+  'users.findById',
+  parameters: AnySqlParameters.document({'id': 1}),
+);
+```
+
+The client posts JSON to `AnySqlOptions.backendUri`. It includes the statement,
+parameters, dialect, and non-secret config values. It intentionally omits
+`AnySqlConfig.password`.
+
+Example request body:
+
+```json
+{
+  "dialect": "postgres",
+  "config": {
+    "host": "localhost",
+    "port": 5432,
+    "database": "app",
+    "username": "postgres",
+    "sslEnabled": false,
+    "options": {}
+  },
+  "statement": "users.findById",
+  "parameters": {"id": 1}
+}
+```
+
+Expected response body:
+
+```json
+{
+  "rows": [{"id": 1}],
+  "affectedRows": 0,
+  "lastInsertId": null,
+  "metadata": {"columns": ["id"]}
+}
+```
 
 ## Generate Options
+
+Create one options file interactively:
+
+```sh
+dart run anysql setup
+```
 
 Create starter options for PostgreSQL, MySQL, SQLite, and MongoDB:
 
@@ -58,9 +114,7 @@ final connection = await AnySql.connect(
 await connection.query('create table users (id integer primary key, name text)');
 await connection.query(
   'insert into users (name) values (?)',
-  parameters: {
-    'values': ['Ada'],
-  },
+  parameters: AnySqlParameters.positional(['Ada']),
 );
 
 final users = await connection.query('select * from users');
@@ -93,7 +147,7 @@ final connection = await AnySql.connect(
 
 final result = await connection.query(
   'select id, email from users where id = @id',
-  parameters: {'id': 1},
+  parameters: AnySqlParameters.named({'id': 1}),
 );
 ```
 
@@ -147,9 +201,9 @@ final connection = await AnySql.connect(
 
 final users = await connection.query(
   'users.find',
-  parameters: {
+  parameters: AnySqlParameters.document({
     'filter': {'active': true},
-  },
+  }),
 );
 ```
 
@@ -158,14 +212,23 @@ Supported MongoDB operations are:
 - `collection.find`
 - `collection.findOne`
 - `collection.insertOne`
+- `collection.insertMany`
 - `collection.updateOne`
+- `collection.updateMany`
+- `collection.replaceOne`
 - `collection.deleteOne`
+- `collection.deleteMany`
+- `collection.count`
 - `collection.aggregate`
 
 MongoDB operation failures are wrapped as `AnySqlQueryException`. Invalid
 AnySQL command shapes, such as missing `filter` or `document` maps, remain
 plain `AnySqlException` values so callers can distinguish local usage mistakes
 from database failures.
+
+MongoDB transactions are reported as `AnySqlConnectionException` because the
+current `mongo_dart` driver API does not expose client sessions for
+multi-document transactions.
 
 You can also pass a full MongoDB URI through config options:
 
@@ -195,6 +258,14 @@ final connection = await anySql.open(
   AnySqlConfig.sqlite(database: ':memory:'),
 );
 ```
+
+## Transactions
+
+`AnySqlConnection.transaction` wraps the callback in a single database
+transaction. SQL drivers commit after a successful callback and roll back after
+an exception. Nested transactions and savepoints are intentionally outside the
+shared contract; use the underlying database package or a custom driver if your
+application needs those guarantees.
 
 ## Testing
 

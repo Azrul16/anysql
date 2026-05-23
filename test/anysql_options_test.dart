@@ -174,8 +174,39 @@ final class _FakeConnection implements AnySqlConnection {
   @override
   Future<T> transaction<T>(
     Future<T> Function(AnySqlTransaction transaction) action,
-  ) {
-    throw UnimplementedError();
+  ) async {
+    final transaction = _FakeTransaction();
+
+    try {
+      final value = await action(transaction);
+      await transaction.commit();
+      return value;
+    } catch (_) {
+      await transaction.rollback();
+      rethrow;
+    }
+  }
+}
+
+final class _FakeTransaction implements AnySqlTransaction {
+  var completed = false;
+
+  @override
+  Future<void> commit() async {
+    completed = true;
+  }
+
+  @override
+  Future<AnySqlResult> query(
+    String statement, {
+    Map<String, Object?> parameters = const {},
+  }) async {
+    return AnySqlResult.command(affectedRows: 1);
+  }
+
+  @override
+  Future<void> rollback() async {
+    completed = true;
   }
 }
 

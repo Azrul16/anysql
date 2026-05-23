@@ -16,6 +16,10 @@ abstract interface class AnySqlConnection {
   });
 
   /// Runs work inside a database transaction.
+  ///
+  /// Implementations commit when [action] completes and roll back when it
+  /// throws. Nested transactions and savepoints are not part of the shared
+  /// contract; drivers may reject or define their own behavior for them.
   Future<T> transaction<T>(
     Future<T> Function(AnySqlTransaction transaction) action,
   );

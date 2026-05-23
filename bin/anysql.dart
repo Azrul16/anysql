@@ -9,6 +9,8 @@ void main(List<String> arguments) {
   switch (command) {
     case 'init':
       _init(arguments.skip(1).toList());
+    case 'setup':
+      _setup(arguments.skip(1).toList());
     case 'configure':
       _configure(arguments.skip(1).toList());
     case 'help':
@@ -20,6 +22,130 @@ void main(List<String> arguments) {
       _printHelp();
       exitCode = 64;
   }
+}
+
+void _setup(List<String> arguments) {
+  final args = _Args(arguments);
+  final unknownOptions = args.unknownOptions(_knownSetupOptions);
+  if (unknownOptions.isNotEmpty) {
+    stderr.writeln('Unknown option: ${unknownOptions.first}');
+    exitCode = 64;
+    return;
+  }
+
+  if (args.has('help')) {
+    _printHelp();
+    return;
+  }
+
+  stdout.writeln('AnySQL setup');
+  stdout.writeln('Press Enter to accept defaults or skip optional values.');
+
+  final dialectValue = _prompt(
+    'Dialect [postgres/mysql/sqlite/mongodb]',
+    defaultValue: 'postgres',
+  );
+  final dialect = _parseDialect(dialectValue);
+  if (dialect == null || dialect == AnySqlDialect.custom) {
+    stderr.writeln('Unsupported dialect: $dialectValue');
+    exitCode = 64;
+    return;
+  }
+
+  final database = _prompt(
+    dialect == AnySqlDialect.sqlite ? 'SQLite database path' : 'Database name',
+  );
+  if (database.trim().isEmpty) {
+    stderr.writeln('Database is required.');
+    exitCode = 64;
+    return;
+  }
+
+  String? host;
+  int? port;
+  String? username;
+  String? passwordEnvironmentKey;
+  var sslEnabled = false;
+
+  if (dialect != AnySqlDialect.sqlite) {
+    host = _prompt('Host', defaultValue: 'localhost');
+
+    final portValue = _prompt(
+      'Port',
+      defaultValue: _defaultPort(dialect).toString(),
+    );
+    port = int.tryParse(portValue);
+    if (port == null || port < 1 || port > 65535) {
+      stderr.writeln('Port must be between 1 and 65535: $portValue');
+      exitCode = 64;
+      return;
+    }
+
+    username = _emptyToNull(_prompt('Username'));
+    passwordEnvironmentKey = _emptyToNull(
+      _prompt(
+        'Password dart-define key',
+        defaultValue: _defaultPasswordKey(dialect),
+      ),
+    );
+    sslEnabled = _promptYesNo('Enable SSL', defaultValue: false);
+  }
+
+  final backendUrl = _emptyToNull(_prompt('Backend URL'));
+  if (backendUrl != null) {
+    final uri = Uri.tryParse(backendUrl);
+    if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
+      stderr.writeln('Invalid backend URL: $backendUrl');
+      exitCode = 64;
+      return;
+    }
+  }
+
+  final backendHeaders = <String, String>{};
+  while (true) {
+    final header = _emptyToNull(_prompt('Backend header Name=Value'));
+    if (header == null) {
+      break;
+    }
+
+    final separator = header.indexOf('=');
+    if (separator <= 0) {
+      stderr.writeln('Invalid backend header: $header');
+      stderr.writeln('Use Name=Value.');
+      exitCode = 64;
+      return;
+    }
+    backendHeaders[header.substring(0, separator)] = header.substring(
+      separator + 1,
+    );
+  }
+
+  final className = args.value('class-name') ?? 'DefaultAnySqlOptions';
+  if (!_isValidDartClassName(className)) {
+    stderr.writeln('Invalid --class-name value: $className');
+    exitCode = 64;
+    return;
+  }
+
+  final output = args.value('output') ?? 'lib/anysql_options.dart';
+  final input = AnySqlSetupInput(
+    dialect: dialect,
+    host: host,
+    port: port,
+    database: database,
+    username: username,
+    passwordEnvironmentKey: passwordEnvironmentKey,
+    sslEnabled: sslEnabled,
+    backendUrl: backendUrl,
+    backendHeaders: backendHeaders,
+    className: className,
+  );
+
+  _writeConfiguredOptionsFile(
+    input: input,
+    output: output,
+    force: args.has('force'),
+  );
 }
 
 void _init(List<String> arguments) {
@@ -43,15 +169,17 @@ void _init(List<String> arguments) {
     return;
   }
 
-  final output = args.value('output') ?? 'lib/anysql_options.dart';
-  final outputFile = File(output);
-  if (outputFile.existsSync() && !args.has('force')) {
-    stderr.writeln('$output already exists. Re-run with --force to overwrite.');
-    exitCode = 73;
-    return;
-  }
-
   try {
+    final output = args.value('output') ?? 'lib/anysql_options.dart';
+    final outputFile = File(output);
+    if (outputFile.existsSync() && !args.has('force')) {
+      stderr.writeln(
+        '$output already exists. Re-run with --force to overwrite.',
+      );
+      exitCode = 73;
+      return;
+    }
+
     final contents = generateAnySqlSampleOptionsFile(className: className);
     outputFile.parent.createSync(recursive: true);
     outputFile.writeAsStringSync(contents);
@@ -163,14 +291,6 @@ void _configure(List<String> arguments) {
     );
   }
 
-  final output = args.value('output') ?? 'lib/anysql_options.dart';
-  final outputFile = File(output);
-  if (outputFile.existsSync() && !args.has('force')) {
-    stderr.writeln('$output already exists. Re-run with --force to overwrite.');
-    exitCode = 73;
-    return;
-  }
-
   final input = AnySqlSetupInput(
     dialect: dialect,
     host: host,
@@ -183,6 +303,25 @@ void _configure(List<String> arguments) {
     backendHeaders: parsedBackendHeaders,
     className: className,
   );
+
+  _writeConfiguredOptionsFile(
+    input: input,
+    output: args.value('output') ?? 'lib/anysql_options.dart',
+    force: args.has('force'),
+  );
+}
+
+void _writeConfiguredOptionsFile({
+  required AnySqlSetupInput input,
+  required String output,
+  required bool force,
+}) {
+  final outputFile = File(output);
+  if (outputFile.existsSync() && !force) {
+    stderr.writeln('$output already exists. Re-run with --force to overwrite.');
+    exitCode = 73;
+    return;
+  }
 
   try {
     final contents = generateAnySqlOptionsFile(input);
@@ -211,6 +350,7 @@ anysql
 
 Usage:
   dart run anysql init
+  dart run anysql setup
   dart run anysql configure --dialect postgres --host localhost --database app
 
 Options:
@@ -223,7 +363,7 @@ Options:
   --password-env  Dart define key for the password, for example ANYSQL_PASSWORD.
                   Not supported for sqlite.
   --ssl           Enable SSL in the generated config. Not supported for sqlite.
-  --backend-url   Optional backend API URL for mobile/web apps.
+  --backend-url   Optional backend API URL for mobile apps.
   --backend-header Optional backend header in Name=Value format. Repeatable.
   --output        Output file. Defaults to lib/anysql_options.dart.
   --class-name    Generated class name.
@@ -234,7 +374,31 @@ Options:
 Init command:
   Creates lib/anysql_options.dart with editable dummy configs for PostgreSQL,
   MySQL, SQLite, and MongoDB.
+
+Setup command:
+  Asks a few questions and creates lib/anysql_options.dart for one database.
 ''');
+}
+
+String _prompt(String label, {String? defaultValue}) {
+  final suffix = defaultValue == null ? '' : ' ($defaultValue)';
+  stdout.write('$label$suffix: ');
+  final value = stdin.readLineSync()?.trim() ?? '';
+  if (value.isEmpty && defaultValue != null) {
+    return defaultValue;
+  }
+
+  return value;
+}
+
+bool _promptYesNo(String label, {required bool defaultValue}) {
+  final defaultLabel = defaultValue ? 'Y/n' : 'y/N';
+  final value = _prompt('$label [$defaultLabel]').toLowerCase();
+  if (value.isEmpty) {
+    return defaultValue;
+  }
+
+  return value == 'y' || value == 'yes';
 }
 
 final class _Args {
@@ -314,6 +478,30 @@ const _knownConfigureOptions = {
 
 const _knownInitOptions = {'class-name', 'force', 'help', 'output'};
 
+const _knownSetupOptions = {'class-name', 'force', 'help', 'output'};
+
 bool _isValidDartClassName(String value) {
   return RegExp(r'^[A-Z][A-Za-z0-9_]*$').hasMatch(value);
+}
+
+int _defaultPort(AnySqlDialect dialect) {
+  return switch (dialect) {
+    AnySqlDialect.postgres => 5432,
+    AnySqlDialect.mysql => 3306,
+    AnySqlDialect.mongodb => 27017,
+    AnySqlDialect.sqlite || AnySqlDialect.custom => 0,
+  };
+}
+
+String _defaultPasswordKey(AnySqlDialect dialect) {
+  return switch (dialect) {
+    AnySqlDialect.postgres => 'ANYSQL_POSTGRES_PASSWORD',
+    AnySqlDialect.mysql => 'ANYSQL_MYSQL_PASSWORD',
+    AnySqlDialect.mongodb => 'ANYSQL_MONGODB_PASSWORD',
+    AnySqlDialect.sqlite || AnySqlDialect.custom => 'ANYSQL_PASSWORD',
+  };
+}
+
+String? _emptyToNull(String value) {
+  return value.trim().isEmpty ? null : value;
 }

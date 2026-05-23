@@ -166,16 +166,16 @@ final class AnySqlConfig {
 
   void _validate() {
     if (host != null && host!.trim().isEmpty) {
-      throw const AnySqlException('Host cannot be empty.');
+      throw const AnySqlConfigException('Host cannot be empty.');
     }
     if (database != null && database!.trim().isEmpty) {
-      throw const AnySqlException('Database cannot be empty.');
+      throw const AnySqlConfigException('Database cannot be empty.');
     }
     if (username != null && username!.trim().isEmpty) {
-      throw const AnySqlException('Username cannot be empty.');
+      throw const AnySqlConfigException('Username cannot be empty.');
     }
     if (port != null && (port! < 1 || port! > 65535)) {
-      throw AnySqlException('Port must be between 1 and 65535: $port.');
+      throw AnySqlConfigException('Port must be between 1 and 65535: $port.');
     }
 
     switch (dialect) {
@@ -183,16 +183,20 @@ final class AnySqlConfig {
       case AnySqlDialect.mysql:
       case AnySqlDialect.mongodb:
         if (host == null) {
-          throw AnySqlException('${dialect.name} connections require a host.');
+          throw AnySqlConfigException(
+            '${dialect.name} connections require a host.',
+          );
         }
         if (database == null) {
-          throw AnySqlException(
+          throw AnySqlConfigException(
             '${dialect.name} connections require a database.',
           );
         }
       case AnySqlDialect.sqlite:
         if (database == null) {
-          throw const AnySqlException('sqlite connections require a database.');
+          throw const AnySqlConfigException(
+            'sqlite connections require a database.',
+          );
         }
       case AnySqlDialect.custom:
         break;

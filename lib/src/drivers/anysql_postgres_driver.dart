@@ -5,6 +5,7 @@ import '../anysql_connection.dart';
 import '../anysql_driver.dart';
 import '../anysql_exception.dart';
 import '../anysql_result.dart';
+import 'driver_helpers.dart';
 
 /// Real PostgreSQL driver backed by `package:postgres`.
 ///
@@ -77,7 +78,7 @@ final class PostgresAnySqlConnection implements AnySqlConnection {
       rethrow;
     } on Object catch (error) {
       throw AnySqlQueryException(
-        'Failed to execute PostgreSQL query: ${_statementPreview(statement)}',
+        'Failed to execute PostgreSQL query: ${statementPreview(statement)}',
         error,
       );
     }
@@ -149,7 +150,7 @@ final class _PostgresAnySqlTransaction implements AnySqlTransaction {
     } on Object catch (error) {
       throw AnySqlQueryException(
         'Failed to execute PostgreSQL transaction query: '
-        '${_statementPreview(statement)}',
+        '${statementPreview(statement)}',
         error,
       );
     }
@@ -164,15 +165,6 @@ final class _PostgresAnySqlTransaction implements AnySqlTransaction {
     await _connection.execute(pg.Sql('ROLLBACK'));
     isCompleted = true;
   }
-}
-
-String _statementPreview(String statement) {
-  final compact = statement.trim().replaceAll(RegExp(r'\s+'), ' ');
-  if (compact.length <= 120) {
-    return compact;
-  }
-
-  return '${compact.substring(0, 117)}...';
 }
 
 AnySqlResult _postgresResult(pg.Result result) {

@@ -29,7 +29,7 @@ Future<void> runDirectAnySqlExample(AnySqlOptions options) async {
   try {
     final result = await connection.query(
       'select id, email from users where id = @id',
-      parameters: {'id': 1},
+      parameters: AnySqlParameters.named({'id': 1}),
     );
 
     print(result.firstOrNull);
@@ -39,7 +39,7 @@ Future<void> runDirectAnySqlExample(AnySqlOptions options) async {
 }
 
 Future<void> runBackendAnySqlExample(AnySqlOptions options) async {
-  print('\n2. Backend/proxy pattern for Flutter mobile and web');
+  print('\n2. Backend/proxy pattern for Flutter mobile apps');
 
   final connection = await options.connectBackend(
     client: ExampleBackendClient(),
@@ -48,7 +48,7 @@ Future<void> runBackendAnySqlExample(AnySqlOptions options) async {
   try {
     final result = await connection.query(
       'users.findById',
-      parameters: {'id': 1},
+      parameters: AnySqlParameters.document({'id': 1}),
     );
 
     print(result.firstOrNull);
@@ -71,9 +71,7 @@ Future<void> runRealSqliteAnySqlExample() async {
     );
     await connection.query(
       'insert into users (email) values (?)',
-      parameters: {
-        'values': ['ada@example.com'],
-      },
+      parameters: AnySqlParameters.positional(['ada@example.com']),
     );
 
     final result = await connection.query('select id, email from users');
@@ -136,7 +134,58 @@ final class _ExampleConnection implements AnySqlConnection {
   @override
   Future<T> transaction<T>(
     Future<T> Function(AnySqlTransaction transaction) action,
-  ) {
-    throw UnsupportedError('Example connection does not support transactions.');
+  ) async {
+    if (!_isOpen) {
+      throw const AnySqlException('Connection is closed.');
+    }
+
+    final transaction = _ExampleTransaction(this);
+
+    try {
+      final value = await action(transaction);
+      if (!transaction.isCompleted) {
+        await transaction.commit();
+      }
+      return value;
+    } catch (_) {
+      if (!transaction.isCompleted) {
+        await transaction.rollback();
+      }
+      rethrow;
+    }
+  }
+}
+
+final class _ExampleTransaction implements AnySqlTransaction {
+  _ExampleTransaction(this._connection);
+
+  final _ExampleConnection _connection;
+  var isCompleted = false;
+
+  @override
+  Future<void> commit() async {
+    _checkActive();
+    isCompleted = true;
+  }
+
+  @override
+  Future<AnySqlResult> query(
+    String statement, {
+    Map<String, Object?> parameters = const {},
+  }) {
+    _checkActive();
+    return _connection.query(statement, parameters: parameters);
+  }
+
+  @override
+  Future<void> rollback() async {
+    _checkActive();
+    isCompleted = true;
+  }
+
+  void _checkActive() {
+    if (isCompleted) {
+      throw const AnySqlException('Transaction is already completed.');
+    }
   }
 }
