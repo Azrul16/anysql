@@ -81,6 +81,36 @@ void main() {
     await _expectAnalyzeSuccess(output);
   });
 
+  test('cli setup creates an analyzable options file from prompts', () async {
+    final output = '${generatedRoot.path}/cli_setup_options.dart';
+    final result = await _runCliWithInput(
+      ['setup', '--output', output, '--force'],
+      ['sqlite', 'app.db', '', ''],
+    );
+
+    expect(result.exitCode, 0, reason: result.stderr.toString());
+    expect(File(output).existsSync(), isTrue);
+    expect(result.stdout.toString(), contains('AnySQL setup'));
+    expect(result.stdout.toString(), contains('Created $output'));
+
+    await _expectAnalyzeSuccess(output);
+  });
+
+  test('cli setup rejects invalid backend headers', () async {
+    final result = await _runCliWithInput(
+      [
+        'setup',
+        '--output',
+        '${generatedRoot.path}/invalid_setup_options.dart',
+        '--force',
+      ],
+      ['sqlite', 'app.db', '', 'not-a-header'],
+    );
+
+    expect(result.exitCode, 64);
+    expect(result.stderr.toString(), contains('Invalid backend header'));
+  });
+
   test('cli configure rejects sqlite network options', () async {
     final result = await _runCli([
       'configure',
@@ -115,4 +145,29 @@ Future<ProcessResult> _runDart(List<String> arguments) {
 
 Future<ProcessResult> _runCli(List<String> arguments) {
   return _runDart(['bin/anysql.dart', ...arguments]);
+}
+
+Future<ProcessResult> _runCliWithInput(
+  List<String> arguments,
+  List<String> input,
+) async {
+  final process = await Process.start('dart', [
+    'bin/anysql.dart',
+    ...arguments,
+  ], workingDirectory: Directory.current.path);
+
+  for (final line in input) {
+    process.stdin.writeln(line);
+  }
+  await process.stdin.close();
+
+  final stdoutText = await process.stdout
+      .transform(systemEncoding.decoder)
+      .join();
+  final stderrText = await process.stderr
+      .transform(systemEncoding.decoder)
+      .join();
+  final exitCode = await process.exitCode;
+
+  return ProcessResult(process.pid, exitCode, stdoutText, stderrText);
 }

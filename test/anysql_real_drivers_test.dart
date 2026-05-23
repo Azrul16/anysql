@@ -28,9 +28,7 @@ void main() {
       );
       final insert = await connection.query(
         'insert into users (name) values (?)',
-        parameters: {
-          'values': ['Ada'],
-        },
+        parameters: AnySqlParameters.positional(['Ada']),
       );
       final result = await connection.query('select id, name from users');
 
@@ -59,9 +57,7 @@ void main() {
       await connection.transaction((transaction) async {
         await transaction.query(
           'insert into users (name) values (?)',
-          parameters: {
-            'values': ['Ada'],
-          },
+          parameters: AnySqlParameters.positional(['Ada']),
         );
       });
 
@@ -69,9 +65,7 @@ void main() {
         connection.transaction((transaction) async {
           await transaction.query(
             'insert into users (name) values (?)',
-            parameters: {
-              'values': ['Grace'],
-            },
+            parameters: AnySqlParameters.positional(['Grace']),
           );
           throw StateError('rollback');
         }),

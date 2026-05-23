@@ -5,6 +5,7 @@ import '../anysql_connection.dart';
 import '../anysql_driver.dart';
 import '../anysql_exception.dart';
 import '../anysql_result.dart';
+import 'driver_helpers.dart';
 
 /// Real MySQL driver backed by `package:mysql_client`.
 ///
@@ -79,7 +80,7 @@ final class MysqlAnySqlConnection implements AnySqlConnection {
       rethrow;
     } on Object catch (error) {
       throw AnySqlQueryException(
-        'Failed to execute MySQL query: ${_statementPreview(statement)}',
+        'Failed to execute MySQL query: ${statementPreview(statement)}',
         error,
       );
     }
@@ -151,7 +152,7 @@ final class _MysqlAnySqlTransaction implements AnySqlTransaction {
     } on Object catch (error) {
       throw AnySqlQueryException(
         'Failed to execute MySQL transaction query: '
-        '${_statementPreview(statement)}',
+        '${statementPreview(statement)}',
         error,
       );
     }
@@ -166,15 +167,6 @@ final class _MysqlAnySqlTransaction implements AnySqlTransaction {
     await _connection.execute('ROLLBACK');
     isCompleted = true;
   }
-}
-
-String _statementPreview(String statement) {
-  final compact = statement.trim().replaceAll(RegExp(r'\s+'), ' ');
-  if (compact.length <= 120) {
-    return compact;
-  }
-
-  return '${compact.substring(0, 117)}...';
 }
 
 AnySqlResult _mysqlResult(mysql.IResultSet result) {

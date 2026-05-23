@@ -27,7 +27,7 @@ final connection = await options.connect(
 );
 ```
 
-For Flutter mobile and web apps, copy the backend/proxy pattern:
+For Flutter mobile apps, copy the backend/proxy pattern:
 
 ```dart
 final connection = await options.connectBackend(
@@ -35,11 +35,17 @@ final connection = await options.connectBackend(
 );
 ```
 
-Do not ship production database passwords inside a Flutter mobile or web app.
+Do not ship production database passwords inside a Flutter mobile app.
 
 ## Generate Your Own Options
 
 Create a starter options file:
+
+```sh
+dart run anysql setup
+```
+
+Create a sample options file for all built-in dialects:
 
 ```sh
 dart run anysql init

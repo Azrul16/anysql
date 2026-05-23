@@ -9,9 +9,9 @@ Use it when you want your app code to work with `AnySqlConfig`,
 coupled to PostgreSQL, MySQL, SQLite, MongoDB, or a custom data service.
 
 > Important: direct database connections are for trusted Dart environments such
-> as CLIs, backend services, workers, and tests. Flutter mobile and web apps
-> should normally call a secure backend API instead of shipping production
-> database credentials inside the app.
+> as CLIs, backend services, workers, and tests. Flutter mobile apps should
+> normally call a secure backend API instead of shipping production database
+> credentials inside the app.
 
 ## What This Package Includes
 
@@ -21,6 +21,7 @@ coupled to PostgreSQL, MySQL, SQLite, MongoDB, or a custom data service.
 - Connection settings for PostgreSQL, MySQL, SQLite, MongoDB, and custom
   backends: `AnySqlConfig`.
 - App-level options files: `AnySqlOptions`.
+- A ready-to-use JSON HTTP backend client: `AnySqlHttpBackendClient`.
 - Built-in direct drivers:
   - `PostgresAnySqlDriver`
   - `MysqlAnySqlDriver`
@@ -47,6 +48,17 @@ Import the core API:
 ```dart
 import 'package:anysql/anysql.dart';
 ```
+
+Create your first options file interactively:
+
+```sh
+dart run anysql setup
+```
+
+The core API and HTTP backend client are suitable for Dart and Flutter native
+apps. This package currently includes native direct-driver dependencies, so it
+does not advertise browser/web support. A future package split can move direct
+drivers into a separate package and keep the core API web-safe.
 
 Import the built-in direct database drivers only when you need them:
 
@@ -76,9 +88,7 @@ Future<void> main() async {
 
     await connection.query(
       'insert into users (email) values (?)',
-      parameters: {
-        'values': ['ada@example.com'],
-      },
+      parameters: AnySqlParameters.positional(['ada@example.com']),
     );
 
     final result = await connection.query('select id, email from users');
@@ -89,9 +99,18 @@ Future<void> main() async {
 }
 ```
 
-SQLite positional parameters use the special `values` list.
+SQLite positional parameters use `AnySqlParameters.positional`.
 
 ## Generate an Options File
+
+For the easiest setup after installing the package, run:
+
+```sh
+dart run anysql setup
+```
+
+The command asks for your dialect, database, optional backend URL, and writes
+`lib/anysql_options.dart`.
 
 Create an editable options file with sample configs for PostgreSQL, MySQL,
 SQLite, and MongoDB:
@@ -121,8 +140,8 @@ Future<void> main() async {
 
   try {
     final result = await connection.query(
-      'select id, email from users where id = @id',
-      parameters: {'id': 1},
+  'select id, email from users where id = @id',
+      parameters: AnySqlParameters.named({'id': 1}),
     );
 
     print(result.firstOrNull);
@@ -203,8 +222,8 @@ Future<void> main() async {
 
   try {
     final users = await connection.query(
-      'select id, email from users where active = @active',
-      parameters: {'active': true},
+  'select id, email from users where active = @active',
+      parameters: AnySqlParameters.named({'active': true}),
     );
 
     for (final row in users.rows) {
@@ -216,27 +235,44 @@ Future<void> main() async {
 }
 ```
 
-## Flutter Mobile and Web
+## Flutter Mobile and Backend Access
 
 Do not put production database usernames or passwords directly in Flutter
-mobile or web apps. Instead, keep the real database connection on your server
-and let the app call that server.
+mobile apps. Instead, keep the real database connection on your server and let
+the app call that server. Browser/web support is not advertised while the
+package includes native direct-driver dependencies.
 
-`anysql` supports this with `AnySqlBackendClient`:
+`anysql` supports this with `AnySqlBackendClient`. For a JSON HTTP backend,
+use the built-in `AnySqlHttpBackendClient`:
 
 ```dart
 final connection = await DefaultAnySqlOptions.connectBackend(
-  client: myBackendClient,
+  client: AnySqlHttpBackendClient(),
 );
 
 final result = await connection.query(
   'users.findById',
-  parameters: {'id': 1},
+  parameters: AnySqlParameters.document({'id': 1}),
 );
 ```
 
-Your backend client decides how to send the request, authenticate the user, and
-return an `AnySqlResult`.
+`AnySqlHttpBackendClient` sends `POST` requests to `backendUri` with the
+statement, parameters, and non-secret config metadata. It does not send the
+database password from `AnySqlConfig`.
+
+Your backend should return JSON in this shape:
+
+```json
+{
+  "rows": [{"id": 1, "email": "ada@example.com"}],
+  "affectedRows": 0,
+  "lastInsertId": null,
+  "metadata": {"columns": ["id", "email"]}
+}
+```
+
+You can also implement `AnySqlBackendClient` yourself when your backend uses a
+different protocol, authentication flow, or batching model.
 
 ## Built-in Driver Notes
 
@@ -309,14 +345,15 @@ final connection = await AnySql.connect(
 
 final users = await connection.query(
   'users.find',
-  parameters: {
+  parameters: AnySqlParameters.document({
     'filter': {'active': true},
-  },
+  }),
 );
 ```
 
 MongoDB statements use `collection.operation` names. Supported operations are
-`find`, `findOne`, `insertOne`, `updateOne`, `deleteOne`, and `aggregate`.
+`find`, `findOne`, `insertOne`, `insertMany`, `updateOne`, `updateMany`,
+`replaceOne`, `deleteOne`, `deleteMany`, `count`, and `aggregate`.
 
 ## Errors and Debugging
 
@@ -329,6 +366,13 @@ Built-in drivers throw `AnySqlException` subclasses:
 
 Query exceptions include a short statement preview but not parameter values, so
 logs are useful without accidentally printing secrets.
+
+## Transactions
+
+`AnySqlConnection.transaction` commits when the callback completes and rolls
+back when it throws. The shared contract does not include nested transactions
+or savepoints; if you need those, use the underlying database package directly
+or add a custom driver behavior for your project.
 
 ## Register Multiple Drivers
 
@@ -349,6 +393,12 @@ final connection = await anySql.open(
 ```
 
 ## CLI Reference
+
+Create one options file interactively:
+
+```sh
+dart run anysql setup
+```
 
 Create starter options:
 
@@ -388,9 +438,10 @@ dart run anysql --help
 - `PostgresAnySqlDriver` is not found: add
   `import 'package:anysql/anysql_drivers.dart';`.
 - A Flutter app exposes credentials: move direct database access to a backend
-  service and use `AnySqlBackendClient` in the app.
-- SQLite insert parameters do not bind: pass positional values as
-  `parameters: {'values': [...]}`.
+  service and use `AnySqlHttpBackendClient` or a custom `AnySqlBackendClient`
+  in the app.
+- SQLite insert parameters do not bind: pass positional values with
+  `AnySqlParameters.positional([...])`.
 - PostgreSQL parameters do not bind: use `@name` placeholders and pass a map
   with the same names.
 - `dart run anysql configure --dialect sqlite --host ...` fails: SQLite does

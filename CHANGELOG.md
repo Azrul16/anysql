@@ -1,3 +1,31 @@
+## 0.2.1
+
+### Added
+
+- Added `dart run anysql setup` for interactive options file generation after
+  installing the package.
+- Added `AnySqlParameters` helpers for named, positional, and document-style
+  query parameters.
+- Added opt-in live smoke tests for PostgreSQL, MySQL, and MongoDB drivers.
+
+### Changed
+
+- Removed advertised web platform support while the package includes native
+  direct-driver dependencies.
+- Clarified transaction behavior and the shared contract's limits around
+  nested transactions and savepoints.
+- Reused a shared internal statement preview helper across built-in drivers.
+- Updated README, driver guide, example docs, and examples for the new setup
+  and parameter helper flows.
+
+### Fixed
+
+- Fixed HTTP backend client ownership so internally managed clients are scoped
+  per connection while injected clients remain caller-owned.
+- Changed config validation failures to throw `AnySqlConfigException`.
+- Hardened HTTP backend response decoding for malformed rows, metadata, and
+  affected row counts.
+
 ## 0.2.0
 
 ### Added
@@ -19,6 +47,11 @@
 - Added ecosystem notes that explain how `anysql` differs from ORMs, query
   builders, and direct database drivers.
 - Added SQLite tests for wrapped query failures and closed-connection behavior.
+- Added MongoDB adapter support for `insertMany`, `updateMany`, `replaceOne`,
+  `deleteMany`, and `count`.
+- Added `AnySqlHttpBackendClient` for JSON HTTP backend/proxy connections.
+- Added tests for HTTP backend requests, result decoding, missing backend URLs,
+  failed HTTP responses, and closed backend connections.
 
 ### Changed
 
@@ -36,6 +69,12 @@
   statement preview.
 - Wrapped closed PostgreSQL, MySQL, and MongoDB connection usage in
   `AnySqlConnectionException`.
+- Changed unsupported MongoDB transactions to throw a typed
+  `AnySqlConnectionException` with a stable explanation.
+- Completed the example and test fake transaction implementations so no sample
+  connection code is left as an unimplemented stub.
+- Replaced the unused `shelf` dependency with `http` for the built-in backend
+  client.
 
 ### Fixed
 

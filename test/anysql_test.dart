@@ -66,11 +66,11 @@ void main() {
   test('config validates required fields and port range', () {
     expect(
       () => AnySqlConfig.postgres(host: '', database: 'app'),
-      throwsA(isA<AnySqlException>()),
+      throwsA(isA<AnySqlConfigException>()),
     );
     expect(
       () => AnySqlConfig.mysql(host: 'localhost', port: 70000, database: 'app'),
-      throwsA(isA<AnySqlException>()),
+      throwsA(isA<AnySqlConfigException>()),
     );
   });
 
@@ -136,6 +136,21 @@ void main() {
 
     expect(updated.username, isNull);
     expect(updated.sslEnabled, isTrue);
+  });
+
+  test('parameter helpers create driver-specific parameter maps', () {
+    expect(AnySqlParameters.named({'id': 1}), {'id': 1});
+    expect(AnySqlParameters.positional(['Ada']), {
+      AnySqlParameters.positionalValuesKey: ['Ada'],
+    });
+    expect(
+      AnySqlParameters.document({
+        'filter': {'active': true},
+      }),
+      {
+        'filter': {'active': true},
+      },
+    );
   });
 }
 
