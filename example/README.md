@@ -1,51 +1,76 @@
 # anysql Example
 
-This example is designed to run immediately after `dart pub get`.
+This example is designed to run immediately after `dart pub get`. It shows the
+three ways people usually use `anysql`: direct driver access, backend/proxy
+access for Flutter apps, and Firebase-style keyword calls.
 
 ```sh
 dart run example/main.dart
 ```
 
-It prints three results:
+Run it:
+
+```sh
+dart run example/main.dart
+```
+
+It prints three sections:
 
 - a direct connection through a fake PostgreSQL-style driver,
 - a backend/proxy connection through a fake backend client,
-- a real SQLite query using `SqliteAnySqlDriver` and an in-memory database.
+- a real SQLite keyword-store query using `SqliteAnySqlDriver`,
+  `AnySqlStore`, and an in-memory database.
 
-The PostgreSQL-style and backend sections are fake on purpose, so you can learn
-the API without running PostgreSQL, MySQL, or MongoDB locally. The SQLite
-section uses the real built-in driver.
+The first two sections are fake on purpose, so you can learn the API without
+running PostgreSQL, MySQL, MongoDB, or a backend locally. The SQLite section
+uses the real built-in driver.
 
-## What To Copy
-
-For trusted Dart code such as servers, CLIs, workers, and tests, copy the
-direct-driver pattern:
+## Keyword API
 
 ```dart
-final connection = await options.connect(
-  driver: const SqliteAnySqlDriver(),
-);
+final db = connection.store(dialect: AnySqlDialect.sqlite);
+
+await db.collection('users').add({'email': 'ada@example.com', 'active': 1});
+
+final result = await db
+    .collection('users')
+    .where('active', isEqualTo: 1)
+    .limit(10)
+    .get();
 ```
 
-For Flutter mobile apps, copy the backend/proxy pattern:
+## Generated Options
+
+Create your own `lib/anysql_options.dart`:
+
+```sh
+dart run anysql
+```
+
+Then use the generated helper:
 
 ```dart
-final connection = await options.connectBackend(
-  client: myBackendClient,
+final db = await DefaultAnySqlOptions.connectStore(
+  driver: const SqliteAnySqlDriver(),
+);
+
+final users = await db.collection('users').limit(20).get();
+```
+
+For Flutter mobile apps, keep credentials on your server and use the generated
+backend helper:
+
+```dart
+final db = await DefaultAnySqlOptions.connectBackendStore(
+  client: AnySqlHttpBackendClient(),
 );
 ```
 
 Do not ship production database passwords inside a Flutter mobile app.
 
-## Generate Your Own Options
+## More CLI Commands
 
-Create a starter options file:
-
-```sh
-dart run anysql setup
-```
-
-Create a sample options file for all built-in dialects:
+Create a sample options file for all built-in databases:
 
 ```sh
 dart run anysql init

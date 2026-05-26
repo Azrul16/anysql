@@ -66,15 +66,22 @@ Future<void> runRealSqliteAnySqlExample() async {
   );
 
   try {
-    await connection.query(
-      'create table users (id integer primary key, email text not null)',
-    );
-    await connection.query(
-      'insert into users (email) values (?)',
-      parameters: AnySqlParameters.positional(['ada@example.com']),
-    );
+    final db = connection.store(dialect: AnySqlDialect.sqlite);
 
-    final result = await connection.query('select id, email from users');
+    await connection.query(
+      'create table users ('
+      'id integer primary key, '
+      'email text not null, '
+      'active integer not null'
+      ')',
+    );
+    await db.collection('users').add({'email': 'ada@example.com', 'active': 1});
+
+    final result = await db
+        .collection('users')
+        .where('active', isEqualTo: 1)
+        .limit(10)
+        .get();
     print(result.firstOrNull);
   } finally {
     await connection.close();

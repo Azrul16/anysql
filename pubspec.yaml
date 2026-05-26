@@ -1,6 +1,6 @@
 name: anysql
-description: A unified Dart database abstraction, setup generator, HTTP backend client, and driver layer for SQL and NoSQL databases.
-version: 0.2.1
+description: A Firebase-style keyword API, setup generator, HTTP backend client, and driver layer for SQL and NoSQL databases.
+version: 0.2.2
 repository: https://github.com/Azrul16/anysql
 issue_tracker: https://github.com/Azrul16/anysql/issues
 topics:

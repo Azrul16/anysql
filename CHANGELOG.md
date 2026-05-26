@@ -1,3 +1,19 @@
+## 0.2.2
+
+### Added
+
+- Added `AnySqlStore`, a Firebase-style keyword API over `AnySqlConnection`
+  with `collection`, `where`, `orderBy`, `limit`, `offset`, `doc`, `add`,
+  `set`, `update`, and `delete` operations for SQL and MongoDB dialects.
+- Added `connection.store(dialect: ...)` plus `first()` helpers for easier
+  single-row and single-document reads.
+- Improved `dart run anysql`/`dart run anysql setup` so setup asks only for one
+  included database and generates a focused options file with store helpers.
+- Made `dart run anysql` a short alias for interactive setup.
+- Reworked README and example docs so the keyword-store workflow is easier to
+  learn on pub.dev and GitHub.
+- Added keyword-store examples and SQLite coverage for real CRUD behavior.
+
 ## 0.2.1
 
 ### Added
@@ -114,7 +130,7 @@ Initial public release of `anysql`.
   MongoDB, and custom driver options.
 - Driver, connection, transaction, backend client, result, and exception
   contracts for database packages to implement.
-- Firebase-style setup generator available through `dart run anysql configure`.
+- Options generator available through `dart run anysql configure`.
 - Generated `AnySqlOptions` support for direct drivers and backend/proxy
   clients.
 - Defensive copying for config options and result rows.
