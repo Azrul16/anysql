@@ -11,4 +11,5 @@ export 'src/anysql_http_backend.dart';
 export 'src/anysql_options.dart';
 export 'src/anysql_parameters.dart';
 export 'src/anysql_result.dart';
+export 'src/anysql_store.dart';
 export 'src/anysql_value.dart';

@@ -4,15 +4,29 @@ import 'package:anysql/anysql.dart';
 import 'package:anysql/src/setup_file_generator.dart';
 
 void main(List<String> arguments) {
-  final command = arguments.isEmpty ? 'help' : arguments.first;
+  final startsWithSetupOption =
+      arguments.isNotEmpty &&
+      arguments.first.startsWith('--') &&
+      arguments.first != '--help';
+  final command = arguments.isEmpty || startsWithSetupOption
+      ? 'setup'
+      : arguments.first;
+  final commandArguments = arguments.isEmpty
+      ? const <String>[]
+      : startsWithSetupOption
+      ? arguments
+      : arguments.skip(1).toList();
 
   switch (command) {
+    case 'i':
     case 'init':
-      _init(arguments.skip(1).toList());
+      _init(commandArguments);
+    case 's':
     case 'setup':
-      _setup(arguments.skip(1).toList());
+      _setup(commandArguments);
+    case 'c':
     case 'configure':
-      _configure(arguments.skip(1).toList());
+      _configure(commandArguments);
     case 'help':
     case '--help':
     case '-h':
@@ -39,86 +53,31 @@ void _setup(List<String> arguments) {
   }
 
   stdout.writeln('AnySQL setup');
-  stdout.writeln('Press Enter to accept defaults or skip optional values.');
+  stdout.writeln(
+    'Choose one database to configure, like Firebase project setup.',
+  );
+  stdout.writeln('');
+  stdout.writeln('1. PostgreSQL');
+  stdout.writeln('2. MySQL');
+  stdout.writeln('3. SQLite');
+  stdout.writeln('4. MongoDB');
 
   final dialectValue = _prompt(
-    'Dialect [postgres/mysql/sqlite/mongodb]',
-    defaultValue: 'postgres',
+    'Database [1-4 or postgres/mysql/sqlite/mongodb]',
+    defaultValue: '1',
   );
-  final dialect = _parseDialect(dialectValue);
+  final dialect = _parseDialectChoice(dialectValue);
   if (dialect == null || dialect == AnySqlDialect.custom) {
-    stderr.writeln('Unsupported dialect: $dialectValue');
+    stderr.writeln('Unsupported database: $dialectValue');
     exitCode = 64;
     return;
   }
 
-  final database = _prompt(
-    dialect == AnySqlDialect.sqlite ? 'SQLite database path' : 'Database name',
+  stdout.writeln('');
+  stdout.writeln(
+    'The generated file will contain TODO credential placeholders.',
   );
-  if (database.trim().isEmpty) {
-    stderr.writeln('Database is required.');
-    exitCode = 64;
-    return;
-  }
-
-  String? host;
-  int? port;
-  String? username;
-  String? passwordEnvironmentKey;
-  var sslEnabled = false;
-
-  if (dialect != AnySqlDialect.sqlite) {
-    host = _prompt('Host', defaultValue: 'localhost');
-
-    final portValue = _prompt(
-      'Port',
-      defaultValue: _defaultPort(dialect).toString(),
-    );
-    port = int.tryParse(portValue);
-    if (port == null || port < 1 || port > 65535) {
-      stderr.writeln('Port must be between 1 and 65535: $portValue');
-      exitCode = 64;
-      return;
-    }
-
-    username = _emptyToNull(_prompt('Username'));
-    passwordEnvironmentKey = _emptyToNull(
-      _prompt(
-        'Password dart-define key',
-        defaultValue: _defaultPasswordKey(dialect),
-      ),
-    );
-    sslEnabled = _promptYesNo('Enable SSL', defaultValue: false);
-  }
-
-  final backendUrl = _emptyToNull(_prompt('Backend URL'));
-  if (backendUrl != null) {
-    final uri = Uri.tryParse(backendUrl);
-    if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
-      stderr.writeln('Invalid backend URL: $backendUrl');
-      exitCode = 64;
-      return;
-    }
-  }
-
-  final backendHeaders = <String, String>{};
-  while (true) {
-    final header = _emptyToNull(_prompt('Backend header Name=Value'));
-    if (header == null) {
-      break;
-    }
-
-    final separator = header.indexOf('=');
-    if (separator <= 0) {
-      stderr.writeln('Invalid backend header: $header');
-      stderr.writeln('Use Name=Value.');
-      exitCode = 64;
-      return;
-    }
-    backendHeaders[header.substring(0, separator)] = header.substring(
-      separator + 1,
-    );
-  }
+  stdout.writeln('Edit lib/anysql_options.dart after setup.');
 
   final className = args.value('class-name') ?? 'DefaultAnySqlOptions';
   if (!_isValidDartClassName(className)) {
@@ -130,14 +89,7 @@ void _setup(List<String> arguments) {
   final output = args.value('output') ?? 'lib/anysql_options.dart';
   final input = AnySqlSetupInput(
     dialect: dialect,
-    host: host,
-    port: port,
-    database: database,
-    username: username,
-    passwordEnvironmentKey: passwordEnvironmentKey,
-    sslEnabled: sslEnabled,
-    backendUrl: backendUrl,
-    backendHeaders: backendHeaders,
+    database: 'placeholder',
     className: className,
   );
 
@@ -145,6 +97,7 @@ void _setup(List<String> arguments) {
     input: input,
     output: output,
     force: args.has('force'),
+    firebaseStyle: true,
   );
 }
 
@@ -315,6 +268,7 @@ void _writeConfiguredOptionsFile({
   required AnySqlSetupInput input,
   required String output,
   required bool force,
+  bool firebaseStyle = false,
 }) {
   final outputFile = File(output);
   if (outputFile.existsSync() && !force) {
@@ -324,7 +278,9 @@ void _writeConfiguredOptionsFile({
   }
 
   try {
-    final contents = generateAnySqlOptionsFile(input);
+    final contents = firebaseStyle
+        ? generateAnySqlFirebaseStyleOptionsFile(input)
+        : generateAnySqlOptionsFile(input);
     outputFile.parent.createSync(recursive: true);
     outputFile.writeAsStringSync(contents);
     stdout.writeln('Created $output');
@@ -344,11 +300,22 @@ AnySqlDialect? _parseDialect(String value) {
   return null;
 }
 
+AnySqlDialect? _parseDialectChoice(String value) {
+  return switch (value.trim().toLowerCase()) {
+    '1' || 'postgres' || 'postgresql' => AnySqlDialect.postgres,
+    '2' || 'mysql' => AnySqlDialect.mysql,
+    '3' || 'sqlite' || 'sqllite' => AnySqlDialect.sqlite,
+    '4' || 'mongodb' || 'mongo' => AnySqlDialect.mongodb,
+    _ => _parseDialect(value),
+  };
+}
+
 void _printHelp() {
   stdout.writeln('''
 anysql
 
 Usage:
+  dart run anysql
   dart run anysql init
   dart run anysql setup
   dart run anysql configure --dialect postgres --host localhost --database app
@@ -376,7 +343,9 @@ Init command:
   MySQL, SQLite, and MongoDB.
 
 Setup command:
-  Asks a few questions and creates lib/anysql_options.dart for one database.
+  Asks which built-in database you want and creates one focused
+  lib/anysql_options.dart file with editable values and keyword-store helpers.
+  `dart run anysql` is the short form for setup.
 ''');
 }
 
@@ -389,16 +358,6 @@ String _prompt(String label, {String? defaultValue}) {
   }
 
   return value;
-}
-
-bool _promptYesNo(String label, {required bool defaultValue}) {
-  final defaultLabel = defaultValue ? 'Y/n' : 'y/N';
-  final value = _prompt('$label [$defaultLabel]').toLowerCase();
-  if (value.isEmpty) {
-    return defaultValue;
-  }
-
-  return value == 'y' || value == 'yes';
 }
 
 final class _Args {
@@ -482,26 +441,4 @@ const _knownSetupOptions = {'class-name', 'force', 'help', 'output'};
 
 bool _isValidDartClassName(String value) {
   return RegExp(r'^[A-Z][A-Za-z0-9_]*$').hasMatch(value);
-}
-
-int _defaultPort(AnySqlDialect dialect) {
-  return switch (dialect) {
-    AnySqlDialect.postgres => 5432,
-    AnySqlDialect.mysql => 3306,
-    AnySqlDialect.mongodb => 27017,
-    AnySqlDialect.sqlite || AnySqlDialect.custom => 0,
-  };
-}
-
-String _defaultPasswordKey(AnySqlDialect dialect) {
-  return switch (dialect) {
-    AnySqlDialect.postgres => 'ANYSQL_POSTGRES_PASSWORD',
-    AnySqlDialect.mysql => 'ANYSQL_MYSQL_PASSWORD',
-    AnySqlDialect.mongodb => 'ANYSQL_MONGODB_PASSWORD',
-    AnySqlDialect.sqlite || AnySqlDialect.custom => 'ANYSQL_PASSWORD',
-  };
-}
-
-String? _emptyToNull(String value) {
-  return value.trim().isEmpty ? null : value;
 }

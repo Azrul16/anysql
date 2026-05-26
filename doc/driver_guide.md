@@ -75,8 +75,11 @@ Expected response body:
 Create one options file interactively:
 
 ```sh
-dart run anysql setup
+dart run anysql
 ```
+
+This asks you to choose one built-in database and then writes one focused
+`lib/anysql_options.dart` file for that database.
 
 Create starter options for PostgreSQL, MySQL, SQLite, and MongoDB:
 
@@ -121,6 +124,15 @@ final users = await connection.query('select * from users');
 print(users.rows);
 
 await connection.close();
+```
+
+For Firebase-style access, create a store from the connection:
+
+```dart
+final db = connection.store(dialect: AnySqlDialect.sqlite);
+
+await db.collection('users').add({'name': 'Ada'});
+final user = await db.collection('users').doc(1).first();
 ```
 
 SQLite positional parameters are passed with the special `values` list. If you
@@ -273,6 +285,7 @@ This package includes generated-file tests that write options files and run
 `dart analyze` on them. It also includes CLI integration tests for:
 
 - `dart run anysql init`
+- `dart run anysql`
 - `dart run anysql configure --dialect postgres ...`
 - invalid SQLite network flags
 

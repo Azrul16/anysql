@@ -1,37 +1,28 @@
 # anysql
 
-`anysql` is a small Dart database abstraction for projects that want one
-application-facing API for SQL, NoSQL, direct database drivers, and backend
-proxy connections.
+`anysql` is a Dart database package with a Firebase-style keyword API for SQL,
+MongoDB, direct drivers, and backend proxy connections.
 
-Use it when you want your app code to work with `AnySqlConfig`,
-`AnySqlConnection`, `AnySqlResult`, and `AnySqlOptions` instead of being tightly
-coupled to PostgreSQL, MySQL, SQLite, MongoDB, or a custom data service.
+Use it when you want app code that reads like this:
+
+```dart
+final users = await db
+    .collection('users')
+    .where('active', isEqualTo: true)
+    .limit(20)
+    .get();
+```
+
+instead of writing raw SQL or MongoDB commands in every feature.
 
 > Important: direct database connections are for trusted Dart environments such
 > as CLIs, backend services, workers, and tests. Flutter mobile apps should
 > normally call a secure backend API instead of shipping production database
 > credentials inside the app.
 
-## What This Package Includes
+## Quick Start
 
-- A shared connection contract: `AnySqlConnection`.
-- A shared driver contract: `AnySqlDriver`.
-- Normalized query results: `AnySqlResult`.
-- Connection settings for PostgreSQL, MySQL, SQLite, MongoDB, and custom
-  backends: `AnySqlConfig`.
-- App-level options files: `AnySqlOptions`.
-- A ready-to-use JSON HTTP backend client: `AnySqlHttpBackendClient`.
-- Built-in direct drivers:
-  - `PostgresAnySqlDriver`
-  - `MysqlAnySqlDriver`
-  - `SqliteAnySqlDriver`
-  - `MongodbAnySqlDriver`
-- CLI setup commands:
-  - `dart run anysql init`
-  - `dart run anysql configure`
-
-## Install
+Install:
 
 ```sh
 dart pub add anysql
@@ -43,33 +34,61 @@ For Flutter:
 flutter pub add anysql
 ```
 
-Import the core API:
+Create `lib/anysql_options.dart`:
+
+```sh
+dart run anysql
+```
+
+The setup command asks which database you want:
+
+```text
+1. PostgreSQL
+2. MySQL
+3. SQLite
+4. MongoDB
+```
+
+Then it generates one focused options file for that database. Edit the values
+in the generated file, then connect.
+
+For trusted Dart code such as servers, CLIs, workers, and tests:
 
 ```dart
 import 'package:anysql/anysql.dart';
+import 'package:anysql/anysql_drivers.dart';
+
+import 'anysql_options.dart';
+
+Future<void> main() async {
+  final db = await DefaultAnySqlOptions.connectStore(
+    driver: const SqliteAnySqlDriver(),
+  );
+
+  final users = await db.collection('users').limit(20).get();
+  print(users.rows);
+}
 ```
 
-Create your first options file interactively:
-
-```sh
-dart run anysql setup
-```
-
-The core API and HTTP backend client are suitable for Dart and Flutter native
-apps. This package currently includes native direct-driver dependencies, so it
-does not advertise browser/web support. A future package split can move direct
-drivers into a separate package and keep the core API web-safe.
-
-Import the built-in direct database drivers only when you need them:
+For Flutter apps, keep database credentials on your backend and connect through
+your API:
 
 ```dart
-import 'package:anysql/anysql_drivers.dart';
+import 'package:anysql/anysql.dart';
+
+import 'anysql_options.dart';
+
+final db = await DefaultAnySqlOptions.connectBackendStore(
+  client: AnySqlHttpBackendClient(),
+);
+
+final user = await db.collection('users').doc(1).first();
 ```
 
-## Fastest Working Example
+## Try It Now
 
-SQLite can run in memory, so this example works without any external database
-server:
+This example uses an in-memory SQLite database, so it runs without PostgreSQL,
+MySQL, MongoDB, or a backend server:
 
 ```dart
 import 'package:anysql/anysql.dart';
@@ -82,16 +101,26 @@ Future<void> main() async {
   );
 
   try {
-    await connection.query(
-      'create table users (id integer primary key, email text not null)',
-    );
+    final db = connection.store(dialect: AnySqlDialect.sqlite);
 
     await connection.query(
-      'insert into users (email) values (?)',
-      parameters: AnySqlParameters.positional(['ada@example.com']),
+      'create table users ('
+      'id integer primary key, '
+      'email text not null, '
+      'active integer not null'
+      ')',
     );
 
-    final result = await connection.query('select id, email from users');
+    await db.collection('users').add({
+      'email': 'ada@example.com',
+      'active': 1,
+    });
+
+    final result = await db
+        .collection('users')
+        .where('active', isEqualTo: 1)
+        .limit(10)
+        .get();
     print(result.rows);
   } finally {
     await connection.close();
@@ -99,33 +128,113 @@ Future<void> main() async {
 }
 ```
 
-SQLite positional parameters use `AnySqlParameters.positional`.
+Output:
+
+```text
+[{id: 1, email: ada@example.com, active: 1}]
+```
+
+## Keyword Store API
+
+`AnySqlStore` gives `anysql` a Firebase-like API while keeping the package
+database-neutral:
+
+```dart
+final db = connection.store(dialect: config.dialect);
+
+await db.collection('users').add({
+  'email': 'ada@example.com',
+  'active': true,
+});
+
+final users = await db
+    .collection('users')
+    .where('active', isEqualTo: true)
+    .orderBy('created_at', descending: true)
+    .limit(20)
+    .get();
+
+await db.collection('users').doc(1).update({'active': false});
+await db.collection('users').doc(1).delete();
+```
+
+Supported keyword operations:
+
+- `collection(name).get()`
+- `where(field, isEqualTo: value)`
+- `where(field, isNotEqualTo: value)`
+- `where(field, isLessThan: value)`
+- `where(field, isLessThanOrEqualTo: value)`
+- `where(field, isGreaterThan: value)`
+- `where(field, isGreaterThanOrEqualTo: value)`
+- `where(field, whereIn: values)`
+- `orderBy(field, descending: true)`
+- `limit(count)` and `offset(count)`
+- `first()` to read the first matching row or document
+- `add(data)`, `doc(id).get()`, `doc(id).set(data)`,
+  `doc(id).first()`, `doc(id).update(data)`, and `doc(id).delete()`
+
+SQL identifiers are validated before commands are built. Collection/table and
+field names must use letters, numbers, and underscores, starting with a letter
+or underscore.
+
+## What This Package Includes
+
+- Firebase-style keyword access with `AnySqlStore`, `collection`, `where`,
+  `doc`, `add`, `set`, `update`, and `delete`.
+- `dart run anysql` setup that generates one focused options file.
+- Shared connection, driver, config, result, and backend contracts.
+- A ready-to-use JSON HTTP backend client: `AnySqlHttpBackendClient`.
+- Built-in direct drivers:
+  - `PostgresAnySqlDriver`
+  - `MysqlAnySqlDriver`
+  - `SqliteAnySqlDriver`
+  - `MongodbAnySqlDriver`
 
 ## Generate an Options File
 
 For the easiest setup after installing the package, run:
 
 ```sh
-dart run anysql setup
+dart run anysql
 ```
 
-The command asks for your dialect, database, optional backend URL, and writes
-`lib/anysql_options.dart`.
+The command asks you to choose one included database:
 
-Create an editable options file with sample configs for PostgreSQL, MySQL,
-SQLite, and MongoDB:
+```text
+1. PostgreSQL
+2. MySQL
+3. SQLite
+4. MongoDB
+```
+
+Then it writes `lib/anysql_options.dart` for that database only.
+
+The generated file gives you direct-driver helpers:
+
+```dart
+final db = await DefaultAnySqlOptions.connectStore(
+  driver: const SqliteAnySqlDriver(),
+);
+
+final users = await db.collection('users').limit(20).get();
+```
+
+and backend/proxy helpers for Flutter apps:
+
+```dart
+final db = await DefaultAnySqlOptions.connectBackendStore(
+  client: AnySqlHttpBackendClient(),
+);
+```
+
+To generate an editable sample file with all built-in databases:
 
 ```sh
 dart run anysql init
 ```
 
-This creates:
-
-```text
-lib/anysql_options.dart
-```
-
-Use one generated config like this:
+Then choose one of the sample configs:
 
 ```dart
 import 'package:anysql/anysql.dart';
@@ -140,7 +249,7 @@ Future<void> main() async {
 
   try {
     final result = await connection.query(
-  'select id, email from users where id = @id',
+      'select id, email from users where id = @id',
       parameters: AnySqlParameters.named({'id': 1}),
     );
 
@@ -149,6 +258,18 @@ Future<void> main() async {
     await connection.close();
   }
 }
+```
+
+## Raw Query Escape Hatch
+
+When you need database-specific SQL or commands, use `connection.query(...)`
+directly:
+
+```dart
+final result = await connection.query(
+  'select id, email from users where active = @active',
+  parameters: AnySqlParameters.named({'active': true}),
+);
 ```
 
 ## Configure One Database
@@ -198,43 +319,6 @@ Future<void> main() async {
 }
 ```
 
-## Direct Connections
-
-Direct connections are a good fit for Dart servers, command-line tools,
-background jobs, local scripts, and tests.
-
-```dart
-import 'package:anysql/anysql.dart';
-import 'package:anysql/anysql_drivers.dart';
-
-Future<void> main() async {
-  final config = AnySqlConfig.postgres(
-    host: 'localhost',
-    database: 'app',
-    username: 'postgres',
-    password: const String.fromEnvironment('ANYSQL_PASSWORD'),
-  );
-
-  final connection = await AnySql.connect(
-    config: config,
-    driver: const PostgresAnySqlDriver(),
-  );
-
-  try {
-    final users = await connection.query(
-  'select id, email from users where active = @active',
-      parameters: AnySqlParameters.named({'active': true}),
-    );
-
-    for (final row in users.rows) {
-      print(row);
-    }
-  } finally {
-    await connection.close();
-  }
-}
-```
-
 ## Flutter Mobile and Backend Access
 
 Do not put production database usernames or passwords directly in Flutter
@@ -246,14 +330,11 @@ package includes native direct-driver dependencies.
 use the built-in `AnySqlHttpBackendClient`:
 
 ```dart
-final connection = await DefaultAnySqlOptions.connectBackend(
+final db = await DefaultAnySqlOptions.connectBackendStore(
   client: AnySqlHttpBackendClient(),
 );
 
-final result = await connection.query(
-  'users.findById',
-  parameters: AnySqlParameters.document({'id': 1}),
-);
+final users = await db.collection('users').where('active', isEqualTo: true).get();
 ```
 
 `AnySqlHttpBackendClient` sends `POST` requests to `backendUri` with the
@@ -273,8 +354,6 @@ Your backend should return JSON in this shape:
 
 You can also implement `AnySqlBackendClient` yourself when your backend uses a
 different protocol, authentication flow, or batching model.
-
-## Built-in Driver Notes
 
 ## Driver Capability Matrix
 
@@ -395,6 +474,12 @@ final connection = await anySql.open(
 ## CLI Reference
 
 Create one options file interactively:
+
+```sh
+dart run anysql
+```
+
+Explicit setup command:
 
 ```sh
 dart run anysql setup

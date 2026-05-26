@@ -85,18 +85,33 @@ void main() {
     final output = '${generatedRoot.path}/cli_setup_options.dart';
     final result = await _runCliWithInput(
       ['setup', '--output', output, '--force'],
-      ['sqlite', 'app.db', '', ''],
+      ['3'],
     );
 
     expect(result.exitCode, 0, reason: result.stderr.toString());
     expect(File(output).existsSync(), isTrue);
     expect(result.stdout.toString(), contains('AnySQL setup'));
+    expect(result.stdout.toString(), contains('Choose one database'));
     expect(result.stdout.toString(), contains('Created $output'));
 
     await _expectAnalyzeSuccess(output);
   });
 
-  test('cli setup rejects invalid backend headers', () async {
+  test('cli without command runs setup', () async {
+    final output = '${generatedRoot.path}/cli_short_setup_options.dart';
+    final result = await _runCliWithInput(
+      ['--output', output, '--force'],
+      ['3'],
+    );
+
+    expect(result.exitCode, 0, reason: result.stderr.toString());
+    expect(File(output).existsSync(), isTrue);
+    expect(result.stdout.toString(), contains('AnySQL setup'));
+
+    await _expectAnalyzeSuccess(output);
+  });
+
+  test('cli setup rejects unknown databases', () async {
     final result = await _runCliWithInput(
       [
         'setup',
@@ -104,11 +119,11 @@ void main() {
         '${generatedRoot.path}/invalid_setup_options.dart',
         '--force',
       ],
-      ['sqlite', 'app.db', '', 'not-a-header'],
+      ['oracle'],
     );
 
     expect(result.exitCode, 64);
-    expect(result.stderr.toString(), contains('Invalid backend header'));
+    expect(result.stderr.toString(), contains('Unsupported database'));
   });
 
   test('cli configure rejects sqlite network options', () async {
