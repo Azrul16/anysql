@@ -69,5 +69,12 @@ jobs:
       - run: dart pub get
       - run: dart format --output=none --set-exit-if-changed .
       - run: dart analyze
-      - run: dart test
+      - name: Run unit tests
+        run: dart test --exclude-tags external
+      - name: Run PostgreSQL smoke test
+        run: dart test test/anysql_external_drivers_test.dart --plain-name "postgres driver runs a live smoke query"
+      - name: Run MySQL smoke test
+        run: dart test test/anysql_external_drivers_test.dart --plain-name "mysql driver runs a live smoke query"
+      - name: Run MongoDB smoke test
+        run: dart test test/anysql_external_drivers_test.dart --plain-name "mongodb driver runs a live smoke command"
       - run: dart pub publish --dry-run

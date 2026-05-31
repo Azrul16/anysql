@@ -1,3 +1,6 @@
+@Tags(['external'])
+library;
+
 import 'dart:io';
 
 import 'package:anysql/anysql.dart';
