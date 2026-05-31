@@ -7,7 +7,7 @@ void main() {
       host: 'localhost',
       database: 'app',
       username: 'user',
-      password: 'test-password',
+      password: 'placeholder-value',
     );
     final driver = _FakeDriver(AnySqlDialect.postgres);
 
@@ -63,6 +63,15 @@ void main() {
     expect(result.firstOrNull, {'id': 1, 'name': 'Ada'});
   });
 
+  test('store close delegates to its connection', () async {
+    final connection = _FakeConnection();
+    final store = AnySqlStore(connection, dialect: AnySqlDialect.custom);
+
+    await store.close();
+
+    expect(connection.isOpen, isFalse);
+  });
+
   test('config validates required fields and port range', () {
     expect(
       () => AnySqlConfig.postgres(host: '', database: 'app'),
@@ -78,11 +87,11 @@ void main() {
     final config = AnySqlConfig.postgres(
       host: 'localhost',
       database: 'app',
-      password: 'test-password',
+      password: 'placeholder-value',
     );
 
     expect(config.toString(), contains('password: ***'));
-    expect(config.toString(), isNot(contains('test-password')));
+    expect(config.toString(), isNot(contains('placeholder-value')));
   });
 
   test('config equality and hash code ignore option insertion order', () {

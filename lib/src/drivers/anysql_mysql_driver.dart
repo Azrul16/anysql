@@ -20,6 +20,13 @@ final class MysqlAnySqlDriver extends AnySqlDriverBase {
   Future<AnySqlConnection> connect(AnySqlConfig config) async {
     checkSupported(config);
 
+    final collation = _stringOption(
+      config,
+      'collation',
+      defaultValue: 'utf8mb4_general_ci',
+    );
+    final timeoutMs = _intOption(config, 'timeoutMs', defaultValue: 10000);
+
     try {
       final connection = await mysql.MySQLConnection.createConnection(
         host: config.host!,
@@ -28,17 +35,49 @@ final class MysqlAnySqlDriver extends AnySqlDriverBase {
         password: config.password ?? '',
         secure: config.sslEnabled,
         databaseName: config.database,
-        collation:
-            config.options['collation'] as String? ?? 'utf8mb4_general_ci',
+        collation: collation,
       );
-      final timeoutMs = config.options['timeoutMs'] as int? ?? 10000;
       await connection.connect(timeoutMs: timeoutMs);
 
       return MysqlAnySqlConnection(connection);
+    } on AnySqlException {
+      rethrow;
     } on Object catch (error) {
       throw AnySqlException('Failed to connect to MySQL.', error);
     }
   }
+}
+
+String _stringOption(
+  AnySqlConfig config,
+  String key, {
+  required String defaultValue,
+}) {
+  final value = config.options[key];
+  if (value == null) {
+    return defaultValue;
+  }
+  if (value is String && value.trim().isNotEmpty) {
+    return value;
+  }
+
+  throw AnySqlConfigException(
+    'MySQL option "$key" must be a non-empty string.',
+  );
+}
+
+int _intOption(AnySqlConfig config, String key, {required int defaultValue}) {
+  final value = config.options[key];
+  if (value == null) {
+    return defaultValue;
+  }
+  if (value is int && value > 0) {
+    return value;
+  }
+
+  throw AnySqlConfigException(
+    'MySQL option "$key" must be a positive integer.',
+  );
 }
 
 /// AnySQL connection backed by a MySQL connection.

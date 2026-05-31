@@ -18,8 +18,9 @@ import 'package:anysql/anysql_drivers.dart';
 ```
 
 For Flutter mobile apps, prefer a backend/proxy connection instead of shipping
-production database credentials in the app bundle. Browser/web support is not
-advertised while this package includes native direct-driver dependencies.
+production database credentials in the app bundle. The `anysql` package
+includes direct-driver dependencies; import `package:anysql/anysql_drivers.dart`
+only where direct database connections are appropriate.
 
 ## HTTP Backend Client
 
@@ -301,3 +302,4 @@ drivers such as `postgres`, `mysql_client`, `sqlite3`, and `mongo_dart` expose
 database-specific behavior directly. `anysql` sits underneath those kinds of
 choices as a small common contract for configuration, connection lifetime,
 results, backend proxy access, and driver swapping.
+

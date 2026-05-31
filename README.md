@@ -61,11 +61,11 @@ import 'package:anysql/anysql_drivers.dart';
 import 'anysql_options.dart';
 
 Future<void> main() async {
-  final db = await DefaultAnySqlOptions.connectStore(
+  final users = await DefaultAnySqlOptions.withStore(
     driver: const SqliteAnySqlDriver(),
+    action: (db) => db.collection('users').limit(20).get(),
   );
 
-  final users = await db.collection('users').limit(20).get();
   print(users.rows);
 }
 ```
@@ -82,7 +82,11 @@ final db = await DefaultAnySqlOptions.connectBackendStore(
   client: AnySqlHttpBackendClient(),
 );
 
-final user = await db.collection('users').doc(1).first();
+try {
+  final user = await db.collection('users').doc(1).first();
+} finally {
+  await db.close();
+}
 ```
 
 ## Try It Now
@@ -213,11 +217,10 @@ Then it writes `lib/anysql_options.dart` for that database only.
 The generated file gives you direct-driver helpers:
 
 ```dart
-final db = await DefaultAnySqlOptions.connectStore(
+final users = await DefaultAnySqlOptions.withStore(
   driver: const SqliteAnySqlDriver(),
+  action: (db) => db.collection('users').limit(20).get(),
 );
-
-final users = await db.collection('users').limit(20).get();
 ```
 
 and backend/proxy helpers for Flutter apps:
@@ -226,6 +229,12 @@ and backend/proxy helpers for Flutter apps:
 final db = await DefaultAnySqlOptions.connectBackendStore(
   client: AnySqlHttpBackendClient(),
 );
+
+try {
+  final users = await db.collection('users').limit(20).get();
+} finally {
+  await db.close();
+}
 ```
 
 To generate an editable sample file with all built-in databases:
@@ -356,6 +365,8 @@ You can also implement `AnySqlBackendClient` yourself when your backend uses a
 different protocol, authentication flow, or batching model.
 
 ## Driver Capability Matrix
+
+Import `package:anysql/anysql_drivers.dart` to use direct drivers.
 
 | Driver | Backing package | Best fit | Parameter style | Notes |
 | --- | --- | --- | --- | --- |
@@ -563,3 +574,4 @@ Created and maintained by Azrul Amaline.
 ## License
 
 `anysql` is released under the MIT License.
+
