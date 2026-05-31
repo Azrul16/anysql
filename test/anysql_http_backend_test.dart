@@ -30,10 +30,10 @@ void main() {
         host: 'localhost',
         database: 'app',
         username: 'postgres',
-        password: 'secret',
+        password: 'placeholder-value',
       ),
       backendUri: Uri.parse('https://api.example.com/anysql'),
-      backendHeaders: const {'authorization': 'Bearer token'},
+      backendHeaders: const {'x-example-auth': 'example-auth-value'},
     );
 
     final connection = await AnySqlHttpBackendClient(
@@ -47,11 +47,14 @@ void main() {
     final body = jsonDecode(capturedRequest.body) as Map<String, dynamic>;
     expect(capturedRequest.method, 'POST');
     expect(capturedRequest.url, options.backendUri);
-    expect(capturedRequest.headers['authorization'], 'Bearer token');
+    expect(capturedRequest.headers['x-example-auth'], 'example-auth-value');
     expect(body['dialect'], 'postgres');
     expect(body['statement'], 'users.findById');
     expect(body['parameters'], {'id': 1});
-    expect(body['config'], isNot(containsPair('password', 'secret')));
+    expect(
+      body['config'],
+      isNot(containsPair('password', 'placeholder-value')),
+    );
     expect(result.first, {'id': 1, 'email': 'ada@example.com'});
     expect(result.metadata, {
       'columns': ['id', 'email'],
