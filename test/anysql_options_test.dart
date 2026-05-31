@@ -56,6 +56,8 @@ void main() {
     expect(contents, contains('connectBackend'));
     expect(contents, contains('connectStore'));
     expect(contents, contains('connectBackendStore'));
+    expect(contents, contains('withStore'));
+    expect(contents, contains('withBackendStore'));
     expect(contents, isNot(contains('password: null')));
   });
 

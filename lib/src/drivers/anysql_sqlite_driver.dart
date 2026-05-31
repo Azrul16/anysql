@@ -165,7 +165,8 @@ AnySqlResult _sqliteQuery(
   final trimmed = statement.trimLeft().toLowerCase();
   if (trimmed.startsWith('select') ||
       trimmed.startsWith('with') ||
-      trimmed.startsWith('pragma')) {
+      trimmed.startsWith('pragma') ||
+      _hasTopLevelReturningClause(trimmed)) {
     final result = database.select(statement, parameters);
     return AnySqlResult.rows(
       result.map((row) => Map<String, Object?>.from(row)).toList(),
@@ -180,6 +181,102 @@ AnySqlResult _sqliteQuery(
         ? null
         : database.lastInsertRowId,
   );
+}
+
+bool _hasTopLevelReturningClause(String statement) {
+  var depth = 0;
+  for (var index = 0; index < statement.length; index += 1) {
+    final codeUnit = statement.codeUnitAt(index);
+
+    if (codeUnit == 0x27) {
+      index = _skipQuoted(statement, index, 0x27);
+      continue;
+    }
+    if (codeUnit == 0x22) {
+      index = _skipQuoted(statement, index, 0x22);
+      continue;
+    }
+    if (codeUnit == 0x60) {
+      index = _skipQuoted(statement, index, 0x60);
+      continue;
+    }
+    if (_startsWith(statement, index, '--')) {
+      index = _skipLineComment(statement, index);
+      continue;
+    }
+    if (_startsWith(statement, index, '/*')) {
+      index = _skipBlockComment(statement, index);
+      continue;
+    }
+    if (codeUnit == 0x28) {
+      depth += 1;
+      continue;
+    }
+    if (codeUnit == 0x29 && depth > 0) {
+      depth -= 1;
+      continue;
+    }
+    if (depth == 0 && _startsWithWord(statement, index, 'returning')) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+int _skipQuoted(String statement, int start, int quote) {
+  for (var index = start + 1; index < statement.length; index += 1) {
+    if (statement.codeUnitAt(index) != quote) {
+      continue;
+    }
+    if (index + 1 < statement.length &&
+        statement.codeUnitAt(index + 1) == quote) {
+      index += 1;
+      continue;
+    }
+    return index;
+  }
+
+  return statement.length - 1;
+}
+
+int _skipLineComment(String statement, int start) {
+  final newline = statement.indexOf('\n', start + 2);
+  return newline == -1 ? statement.length - 1 : newline;
+}
+
+int _skipBlockComment(String statement, int start) {
+  final end = statement.indexOf('*/', start + 2);
+  return end == -1 ? statement.length - 1 : end + 1;
+}
+
+bool _startsWith(String statement, int index, String value) {
+  return index + value.length <= statement.length &&
+      statement.substring(index, index + value.length) == value;
+}
+
+bool _startsWithWord(String statement, int index, String word) {
+  if (!_startsWith(statement, index, word)) {
+    return false;
+  }
+
+  final before = index == 0 ? null : statement.codeUnitAt(index - 1);
+  final afterIndex = index + word.length;
+  final after = afterIndex >= statement.length
+      ? null
+      : statement.codeUnitAt(afterIndex);
+
+  return !_isIdentifierCodeUnit(before) && !_isIdentifierCodeUnit(after);
+}
+
+bool _isIdentifierCodeUnit(int? codeUnit) {
+  if (codeUnit == null) {
+    return false;
+  }
+
+  return (codeUnit >= 0x30 && codeUnit <= 0x39) ||
+      (codeUnit >= 0x61 && codeUnit <= 0x7A) ||
+      codeUnit == 0x5F;
 }
 
 List<Object?> _sqliteParameters(Map<String, Object?> parameters) {

@@ -63,6 +63,15 @@ void main() {
     expect(result.firstOrNull, {'id': 1, 'name': 'Ada'});
   });
 
+  test('store close delegates to its connection', () async {
+    final connection = _FakeConnection();
+    final store = AnySqlStore(connection, dialect: AnySqlDialect.custom);
+
+    await store.close();
+
+    expect(connection.isOpen, isFalse);
+  });
+
   test('config validates required fields and port range', () {
     expect(
       () => AnySqlConfig.postgres(host: '', database: 'app'),

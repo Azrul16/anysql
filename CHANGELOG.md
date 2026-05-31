@@ -1,3 +1,26 @@
+## 0.3.0
+
+### Added
+
+- Added `AnySqlStore.close()` plus generated `withStore` and
+  `withBackendStore` helpers for safer connection cleanup.
+- Added GitHub Actions CI with live PostgreSQL, MySQL, and MongoDB
+  service-container smoke tests.
+
+### Changed
+
+- Kept core contracts, HTTP backend, and built-in direct drivers in the single
+  `anysql` package.
+- Updated the Dart SDK constraint to `^3.10.0` for modern SQLite native-asset
+  support.
+
+### Fixed
+
+- Made the SQLite driver return rows for statements that use `RETURNING`, while
+  ignoring `returning` inside comments and string literals.
+- Added clear MySQL config validation for `collation` and `timeoutMs` driver
+  options.
+
 ## 0.2.2
 
 ### Added

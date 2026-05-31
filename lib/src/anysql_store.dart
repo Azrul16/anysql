@@ -21,6 +21,11 @@ final class AnySqlStore {
   /// Database family used to compile keyword operations.
   final AnySqlDialect dialect;
 
+  /// Closes the underlying database connection.
+  Future<void> close() {
+    return connection.close();
+  }
+
   /// Returns a collection/table reference.
   AnySqlCollectionReference collection(String name, {String idField = 'id'}) {
     return AnySqlCollectionReference._(
