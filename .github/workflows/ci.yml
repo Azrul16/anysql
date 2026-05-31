@@ -17,7 +17,7 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_PASSWORD: ${{ github.run_id }}
           POSTGRES_DB: postgres
         ports:
           - 5432:5432
@@ -29,12 +29,12 @@ jobs:
       mysql:
         image: mysql:8
         env:
-          MYSQL_ALLOW_EMPTY_PASSWORD: yes
+          MYSQL_ROOT_PASSWORD: ${{ github.run_id }}
           MYSQL_DATABASE: mysql
         ports:
           - 3306:3306
         options: >-
-          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot"
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -p${{ github.run_id }}"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 10
@@ -52,10 +52,12 @@ jobs:
       ANYSQL_POSTGRES_PORT: 5432
       ANYSQL_POSTGRES_DATABASE: postgres
       ANYSQL_POSTGRES_USERNAME: postgres
+      ANYSQL_POSTGRES_PASSWORD: ${{ github.run_id }}
       ANYSQL_MYSQL_HOST: localhost
       ANYSQL_MYSQL_PORT: 3306
       ANYSQL_MYSQL_DATABASE: mysql
       ANYSQL_MYSQL_USERNAME: root
+      ANYSQL_MYSQL_PASSWORD: ${{ github.run_id }}
       ANYSQL_MONGODB_HOST: localhost
       ANYSQL_MONGODB_PORT: 27017
       ANYSQL_MONGODB_DATABASE: test
