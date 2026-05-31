@@ -27,9 +27,10 @@ jobs:
           --health-timeout 5s
           --health-retries 5
       mysql:
-        image: mysql:8
+        image: mysql:8.0
         env:
           MYSQL_ROOT_PASSWORD: ${{ github.run_id }}
+          MYSQL_ROOT_HOST: '%'
           MYSQL_DATABASE: mysql
         ports:
           - 3306:3306
@@ -66,6 +67,11 @@ jobs:
       - uses: dart-lang/setup-dart@v1
         with:
           sdk: ${{ matrix.sdk }}
+      - name: Configure MySQL CI user auth
+        run: >-
+          docker exec ${{ job.services.mysql.id }}
+          mysql -uroot -p${{ github.run_id }}
+          -e "ALTER USER 'root'@'%' IDENTIFIED WITH mysql_native_password BY '${{ github.run_id }}'; FLUSH PRIVILEGES;"
       - run: dart pub get
       - run: dart format --output=none --set-exit-if-changed .
       - run: dart analyze
