@@ -164,7 +164,7 @@ final class MongodbAnySqlConnection implements AnySqlConnection {
             _document(parameters['filter']) ?? _document(parameters),
           );
           return AnySqlResult.rows([
-            {'count': count},
+            {'count': _countValue(count)},
           ]);
         default:
           throw AnySqlException(
@@ -306,4 +306,18 @@ List<Map<String, Object>> _pipeline(List values) {
 
 List<Map<String, Object?>> _mongoRows(List<Map<String, dynamic>> rows) {
   return rows.map((row) => Map<String, Object?>.from(row)).toList();
+}
+
+int _countValue(Object? value) {
+  if (value is int) {
+    return value;
+  }
+  if (value is num) {
+    return value.toInt();
+  }
+
+  throw AnySqlQueryException(
+    'MongoDB count returned an unexpected value.',
+    value,
+  );
 }
