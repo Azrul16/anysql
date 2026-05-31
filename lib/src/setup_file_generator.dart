@@ -69,6 +69,18 @@ final class ${input.className} {
     return connection.store(dialect: dialect);
   }
 
+  static Future<T> withStore<T>({
+    required AnySqlDriver driver,
+    required Future<T> Function(AnySqlStore store) action,
+  }) async {
+    final store = await connectStore(driver: driver);
+    try {
+      return await action(store);
+    } finally {
+      await store.close();
+    }
+  }
+
   static Future<AnySqlConnection> openWith(AnySql anySql) {
     return current.openWith(anySql);
   }
@@ -84,6 +96,18 @@ final class ${input.className} {
   }) async {
     final connection = await connectBackend(client: client);
     return connection.store(dialect: dialect);
+  }
+
+  static Future<T> withBackendStore<T>({
+    required AnySqlBackendClient client,
+    required Future<T> Function(AnySqlStore store) action,
+  }) async {
+    final store = await connectBackendStore(client: client);
+    try {
+      return await action(store);
+    } finally {
+      await store.close();
+    }
   }
 }
 ''';

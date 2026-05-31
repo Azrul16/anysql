@@ -1,5 +1,4 @@
 import 'package:anysql/anysql.dart';
-import 'package:anysql/anysql_drivers.dart';
 
 Future<void> main() async {
   print('anysql example');
@@ -18,7 +17,7 @@ Future<void> main() async {
 
   await runDirectAnySqlExample(options);
   await runBackendAnySqlExample(options);
-  await runRealSqliteAnySqlExample();
+  await runKeywordStoreExample();
 }
 
 Future<void> runDirectAnySqlExample(AnySqlOptions options) async {
@@ -57,29 +56,17 @@ Future<void> runBackendAnySqlExample(AnySqlOptions options) async {
   }
 }
 
-Future<void> runRealSqliteAnySqlExample() async {
-  print('\n3. Real SQLite driver with an in-memory database');
+Future<void> runKeywordStoreExample() async {
+  print('\n3. Keyword store pattern over any connection');
 
-  final connection = await AnySql.connect(
-    config: AnySqlConfig.sqlite(database: ':memory:'),
-    driver: const SqliteAnySqlDriver(),
-  );
+  final connection = _ExampleConnection(source: 'keyword store connection');
 
   try {
-    final db = connection.store(dialect: AnySqlDialect.sqlite);
-
-    await connection.query(
-      'create table users ('
-      'id integer primary key, '
-      'email text not null, '
-      'active integer not null'
-      ')',
-    );
-    await db.collection('users').add({'email': 'ada@example.com', 'active': 1});
+    final db = connection.store(dialect: AnySqlDialect.postgres);
 
     final result = await db
         .collection('users')
-        .where('active', isEqualTo: 1)
+        .where('active', isEqualTo: true)
         .limit(10)
         .get();
     print(result.firstOrNull);

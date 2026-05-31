@@ -16,6 +16,30 @@ void main() {
     }
   });
 
+  test('mysql driver validates option types before connecting', () async {
+    await expectLater(
+      const MysqlAnySqlDriver().connect(
+        AnySqlConfig.mysql(
+          host: 'localhost',
+          database: 'app',
+          options: {'collation': 123},
+        ),
+      ),
+      throwsA(isA<AnySqlConfigException>()),
+    );
+
+    await expectLater(
+      const MysqlAnySqlDriver().connect(
+        AnySqlConfig.mysql(
+          host: 'localhost',
+          database: 'app',
+          options: {'timeoutMs': 0},
+        ),
+      ),
+      throwsA(isA<AnySqlConfigException>()),
+    );
+  });
+
   test('sqlite driver runs real in-memory queries', () async {
     final connection = await AnySql.connect(
       config: AnySqlConfig.sqlite(database: ':memory:'),
@@ -42,6 +66,79 @@ void main() {
     }
 
     expect(connection.isOpen, isFalse);
+  });
+
+  test('sqlite driver returns rows from insert returning', () async {
+    final connection = await AnySql.connect(
+      config: AnySqlConfig.sqlite(database: ':memory:'),
+      driver: const SqliteAnySqlDriver(),
+    );
+
+    try {
+      await connection.query(
+        'create table users (id integer primary key, name text not null)',
+      );
+      final result = await connection.query(
+        'insert into users (name) values (?) returning id, name',
+        parameters: AnySqlParameters.positional(['Ada']),
+      );
+
+      expect(result.rows, [
+        {'id': 1, 'name': 'Ada'},
+      ]);
+      expect(result.metadata, {
+        'columns': ['id', 'name'],
+      });
+    } finally {
+      await connection.close();
+    }
+  });
+
+  test(
+    'sqlite driver does not treat returning in literals as row output',
+    () async {
+      final connection = await AnySql.connect(
+        config: AnySqlConfig.sqlite(database: ':memory:'),
+        driver: const SqliteAnySqlDriver(),
+      );
+
+      try {
+        await connection.query(
+          'create table users (id integer primary key, name text not null)',
+        );
+        final result = await connection.query(
+          "insert into users (name) values ('returning')",
+        );
+
+        expect(result.rows, isEmpty);
+        expect(result.affectedRows, 1);
+        expect(result.lastInsertId, 1);
+      } finally {
+        await connection.close();
+      }
+    },
+  );
+
+  test('sqlite driver ignores returning in comments', () async {
+    final connection = await AnySql.connect(
+      config: AnySqlConfig.sqlite(database: ':memory:'),
+      driver: const SqliteAnySqlDriver(),
+    );
+
+    try {
+      await connection.query(
+        'create table users (id integer primary key, name text not null)',
+      );
+      final result = await connection.query(
+        'insert into users (name) values (?) -- returning id',
+        parameters: AnySqlParameters.positional(['Ada']),
+      );
+
+      expect(result.rows, isEmpty);
+      expect(result.affectedRows, 1);
+    } finally {
+      await connection.close();
+    }
   });
 
   test('sqlite driver commits and rolls back transactions', () async {
