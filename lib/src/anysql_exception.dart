@@ -42,3 +42,9 @@ final class AnySqlQueryException extends AnySqlException {
   /// Creates a query exception.
   const AnySqlQueryException(super.message, [super.cause]);
 }
+
+/// Exception thrown when an optional operation is not supported.
+final class AnySqlUnsupportedException extends AnySqlException {
+  /// Creates an unsupported-operation exception.
+  const AnySqlUnsupportedException(super.message, [super.cause]);
+}

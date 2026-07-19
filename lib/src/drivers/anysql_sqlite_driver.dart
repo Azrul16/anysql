@@ -15,7 +15,16 @@ import 'driver_helpers.dart';
 /// the database path to create an in-memory database.
 final class SqliteAnySqlDriver extends AnySqlDriverBase {
   /// Creates a SQLite driver.
-  const SqliteAnySqlDriver() : super('sqlite', AnySqlDialect.sqlite);
+  const SqliteAnySqlDriver()
+    : super(
+        'sqlite',
+        AnySqlDialect.sqlite,
+        capabilities: const AnySqlCapabilities(
+          transactions: true,
+          returningRows: true,
+          upsert: true,
+        ),
+      );
 
   @override
   Future<AnySqlConnection> connect(AnySqlConfig config) async {
@@ -28,7 +37,7 @@ final class SqliteAnySqlDriver extends AnySqlDriverBase {
 
       return SqliteAnySqlConnection(database);
     } on Object catch (error) {
-      throw AnySqlException('Failed to open SQLite database.', error);
+      throw AnySqlConnectionException('Failed to open SQLite database.', error);
     }
   }
 }
@@ -103,7 +112,7 @@ final class SqliteAnySqlConnection implements AnySqlConnection {
 
   void _checkOpen() {
     if (!_isOpen) {
-      throw const AnySqlException('SQLite connection is closed.');
+      throw const AnySqlConnectionException('SQLite connection is closed.');
     }
   }
 }
@@ -117,7 +126,9 @@ final class _SqliteAnySqlTransaction implements AnySqlTransaction {
   @override
   Future<void> commit() async {
     if (isCompleted) {
-      throw const AnySqlException('Transaction is already completed.');
+      throw const AnySqlConnectionException(
+        'Transaction is already completed.',
+      );
     }
 
     _database.execute('COMMIT');
@@ -130,7 +141,9 @@ final class _SqliteAnySqlTransaction implements AnySqlTransaction {
     Map<String, Object?> parameters = const {},
   }) async {
     if (isCompleted) {
-      throw const AnySqlException('Transaction is already completed.');
+      throw const AnySqlConnectionException(
+        'Transaction is already completed.',
+      );
     }
 
     try {
@@ -149,7 +162,9 @@ final class _SqliteAnySqlTransaction implements AnySqlTransaction {
   @override
   Future<void> rollback() async {
     if (isCompleted) {
-      throw const AnySqlException('Transaction is already completed.');
+      throw const AnySqlConnectionException(
+        'Transaction is already completed.',
+      );
     }
 
     _database.execute('ROLLBACK');

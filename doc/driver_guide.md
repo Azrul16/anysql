@@ -42,6 +42,10 @@ The client posts JSON to `AnySqlOptions.backendUri`. It includes the statement,
 parameters, dialect, and non-secret config values. It intentionally omits
 `AnySqlConfig.password`.
 
+The backend must authenticate callers and authorize statements or commands.
+Do not treat omission of the database password as sufficient protection for an
+endpoint that accepts arbitrary queries.
+
 Example request body:
 
 ```json
@@ -239,7 +243,7 @@ AnySQL command shapes, such as missing `filter` or `document` maps, remain
 plain `AnySqlException` values so callers can distinguish local usage mistakes
 from database failures.
 
-MongoDB transactions are reported as `AnySqlConnectionException` because the
+MongoDB transactions are reported as `AnySqlUnsupportedException` because the
 current `mongo_dart` driver API does not expose client sessions for
 multi-document transactions.
 
@@ -302,4 +306,3 @@ drivers such as `postgres`, `mysql_client`, `sqlite3`, and `mongo_dart` expose
 database-specific behavior directly. `anysql` sits underneath those kinds of
 choices as a small common contract for configuration, connection lifetime,
 results, backend proxy access, and driver swapping.
-

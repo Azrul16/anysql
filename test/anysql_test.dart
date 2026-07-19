@@ -31,7 +31,7 @@ void main() {
 
     expect(
       () => anySql.register(_FakeDriver(AnySqlDialect.postgres)),
-      throwsA(isA<AnySqlException>()),
+      throwsA(isA<AnySqlDriverException>()),
     );
   });
 
@@ -39,7 +39,10 @@ void main() {
     final anySql = AnySql([_FakeDriver(AnySqlDialect.mysql)]);
     final config = AnySqlConfig.postgres(host: 'localhost', database: 'app');
 
-    expect(() => anySql.driverFor(config), throwsA(isA<AnySqlException>()));
+    expect(
+      () => anySql.driverFor(config),
+      throwsA(isA<AnySqlDriverException>()),
+    );
   });
 
   test('driver base rejects unsupported dialects', () {
@@ -48,8 +51,14 @@ void main() {
 
     expect(
       () => driver.checkSupported(config),
-      throwsA(isA<AnySqlException>()),
+      throwsA(isA<AnySqlDriverException>()),
     );
+  });
+
+  test('legacy drivers default to no optional capabilities', () {
+    final AnySqlDriver driver = _LegacyDriver();
+
+    expect(driver.capabilities, same(AnySqlCapabilities.none));
   });
 
   test('result helpers expose row state', () {
@@ -172,6 +181,19 @@ final class _FakeDriver extends AnySqlDriverBase {
   Future<AnySqlConnection> connect(AnySqlConfig config) async {
     checkSupported(config);
     lastConfig = config;
+    return _FakeConnection();
+  }
+}
+
+final class _LegacyDriver implements AnySqlDriver {
+  @override
+  String get name => 'legacy';
+
+  @override
+  bool supports(AnySqlConfig config) => true;
+
+  @override
+  Future<AnySqlConnection> connect(AnySqlConfig config) async {
     return _FakeConnection();
   }
 }

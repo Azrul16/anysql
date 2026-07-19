@@ -1,6 +1,6 @@
 name: anysql
 description: A Firebase-style keyword API, setup generator, HTTP backend client, and driver layer for SQL and NoSQL databases.
-version: 0.3.0
+version: 0.3.1
 repository: https://github.com/Azrul16/anysql
 issue_tracker: https://github.com/Azrul16/anysql/issues
 topics:

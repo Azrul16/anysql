@@ -158,6 +158,15 @@ void main() {
     );
   });
 
+  test('http backend reports transactions as unsupported', () async {
+    final connection = await _backendConnectionForResponse('{}');
+
+    expect(
+      () => connection.transaction((_) async => 1),
+      throwsA(isA<AnySqlUnsupportedException>()),
+    );
+  });
+
   test(
     'http backend does not close an injected client with a connection',
     () async {

@@ -34,6 +34,17 @@ For Flutter:
 flutter pub add anysql
 ```
 
+Or add the current release directly to `pubspec.yaml`:
+
+```yaml
+dependencies:
+  anysql: ^0.3.1
+```
+
+Then run `dart pub get` or `flutter pub get`. Import the core API from
+`package:anysql/anysql.dart`; trusted applications that connect directly also
+import `package:anysql/anysql_drivers.dart`.
+
 Create `lib/anysql_options.dart`:
 
 ```sh
@@ -52,7 +63,8 @@ The setup command asks which database you want:
 Then it generates one focused options file for that database. Edit the values
 in the generated file, then connect.
 
-For trusted Dart code such as servers, CLIs, workers, and tests:
+If you selected SQLite, connect from trusted Dart code such as a server, CLI,
+worker, or test like this:
 
 ```dart
 import 'package:anysql/anysql.dart';
@@ -162,9 +174,19 @@ await db.collection('users').doc(1).update({'active': false});
 await db.collection('users').doc(1).delete();
 ```
 
+Run keyword operations atomically on drivers that declare transaction support:
+
+```dart
+await db.transaction((transaction) async {
+  await transaction.collection('accounts').doc(1).update({'balance': 90});
+  await transaction.collection('accounts').doc(2).update({'balance': 110});
+});
+```
+
 Supported keyword operations:
 
 - `collection(name).get()`
+- `select(fields)`, `count()`, and `exists()`
 - `where(field, isEqualTo: value)`
 - `where(field, isNotEqualTo: value)`
 - `where(field, isLessThan: value)`
@@ -172,11 +194,13 @@ Supported keyword operations:
 - `where(field, isGreaterThan: value)`
 - `where(field, isGreaterThanOrEqualTo: value)`
 - `where(field, whereIn: values)`
+- `where(field, whereNotIn: values)`
 - `orderBy(field, descending: true)`
 - `limit(count)` and `offset(count)`
 - `first()` to read the first matching row or document
-- `add(data)`, `doc(id).get()`, `doc(id).set(data)`,
-  `doc(id).first()`, `doc(id).update(data)`, and `doc(id).delete()`
+- `add(data)` and `addAll(data)` for inserts
+- `doc(id).get()`, `doc(id).set(data)`, `doc(id).first()`,
+  `doc(id).update(data)`, and `doc(id).delete()`
 
 SQL identifiers are validated before commands are built. Collection/table and
 field names must use letters, numbers, and underscores, starting with a letter
@@ -350,6 +374,9 @@ final users = await db.collection('users').where('active', isEqualTo: true).get(
 statement, parameters, and non-secret config metadata. It does not send the
 database password from `AnySqlConfig`.
 
+The backend endpoint must authenticate callers and authorize every operation.
+Do not expose an unrestricted raw SQL proxy to untrusted applications.
+
 Your backend should return JSON in this shape:
 
 ```json
@@ -378,6 +405,20 @@ Import `package:anysql/anysql_drivers.dart` to use direct drivers.
 The built-in direct drivers are intentionally thin adapters over established
 database packages. They normalize results and errors, but they do not hide the
 database engine or replace database-specific knowledge.
+
+Drivers also declare optional features through `capabilities`:
+
+```dart
+const driver = SqliteAnySqlDriver();
+
+if (driver.capabilities.transactions) {
+  // It is safe to rely on connection.transaction().
+}
+```
+
+The declared features are `transactions`, `returningRows`, `upsert`, and
+`aggregation`. Existing third-party drivers that do not declare capabilities
+receive the conservative `AnySqlCapabilities.none` value.
 
 ### SQLite
 
@@ -453,6 +494,8 @@ Built-in drivers throw `AnySqlException` subclasses:
 - `AnySqlDriverException` when no registered driver supports a config.
 - `AnySqlConnectionException` when a closed connection is used.
 - `AnySqlQueryException` when the underlying database package rejects a query.
+- `AnySqlUnsupportedException` when a driver or backend lacks an optional
+  operation such as transactions.
 
 Query exceptions include a short statement preview but not parameter values, so
 logs are useful without accidentally printing secrets.
@@ -547,9 +590,13 @@ dart run anysql --help
 
 ## More Documentation
 
-See [doc/driver_guide.md](doc/driver_guide.md) for a longer driver guide.
+See the
+[driver guide](https://github.com/Azrul16/anysql/blob/main/doc/driver_guide.md)
+for longer direct-driver documentation.
 
-See [example/main.dart](example/main.dart) for a runnable example that covers:
+See the
+[runnable example](https://github.com/Azrul16/anysql/blob/main/example/main.dart)
+that covers:
 
 - a fake direct PostgreSQL-style driver,
 - a fake backend/proxy client,
@@ -574,4 +621,3 @@ Created and maintained by Azrul Amaline.
 ## License
 
 `anysql` is released under the MIT License.
-

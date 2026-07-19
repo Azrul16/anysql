@@ -5,10 +5,6 @@ three ways people usually use the `anysql` package: direct driver access
 through a driver interface, backend/proxy access for Flutter apps, and
 Firebase-style keyword calls.
 
-```sh
-dart run example/main.dart
-```
-
 Run it:
 
 ```sh
@@ -19,11 +15,12 @@ It prints three sections:
 
 - a direct connection through a fake PostgreSQL-style driver,
 - a backend/proxy connection through a fake backend client,
-- a keyword-store query over a fake connection.
+- a keyword-store query over a real in-memory SQLite database.
 
-The sections are fake on purpose, so you can learn the API without running
-PostgreSQL, MySQL, MongoDB, SQLite, or a backend locally. Direct database
-drivers are available from `package:anysql/anysql_drivers.dart`.
+The first two sections are fake on purpose, and SQLite runs entirely in memory,
+so you can learn the API without running PostgreSQL, MySQL, MongoDB, or a
+backend locally. Direct database drivers are available from
+`package:anysql/anysql_drivers.dart`.
 
 ## Keyword API
 
@@ -99,4 +96,3 @@ dart -DANYSQL_PASSWORD=your_password run example/main.dart
 ```
 
 Project repository: [github.com/Azrul16/anysql](https://github.com/Azrul16/anysql)
-

@@ -14,7 +14,16 @@ import 'driver_helpers.dart';
 /// and [AnySqlConfig.sslEnabled] to open a PostgreSQL connection.
 final class PostgresAnySqlDriver extends AnySqlDriverBase {
   /// Creates a PostgreSQL driver.
-  const PostgresAnySqlDriver() : super('postgres', AnySqlDialect.postgres);
+  const PostgresAnySqlDriver()
+    : super(
+        'postgres',
+        AnySqlDialect.postgres,
+        capabilities: const AnySqlCapabilities(
+          transactions: true,
+          returningRows: true,
+          upsert: true,
+        ),
+      );
 
   @override
   Future<AnySqlConnection> connect(AnySqlConfig config) async {
@@ -36,7 +45,10 @@ final class PostgresAnySqlDriver extends AnySqlDriverBase {
 
       return PostgresAnySqlConnection(connection);
     } on Object catch (error) {
-      throw AnySqlException('Failed to connect to PostgreSQL.', error);
+      throw AnySqlConnectionException(
+        'Failed to connect to PostgreSQL.',
+        error,
+      );
     }
   }
 }
@@ -122,7 +134,9 @@ final class _PostgresAnySqlTransaction implements AnySqlTransaction {
   @override
   Future<void> commit() async {
     if (isCompleted) {
-      throw const AnySqlException('Transaction is already completed.');
+      throw const AnySqlConnectionException(
+        'Transaction is already completed.',
+      );
     }
 
     await _connection.execute(pg.Sql('COMMIT'));
@@ -135,7 +149,9 @@ final class _PostgresAnySqlTransaction implements AnySqlTransaction {
     Map<String, Object?> parameters = const {},
   }) async {
     if (isCompleted) {
-      throw const AnySqlException('Transaction is already completed.');
+      throw const AnySqlConnectionException(
+        'Transaction is already completed.',
+      );
     }
 
     try {
@@ -159,7 +175,9 @@ final class _PostgresAnySqlTransaction implements AnySqlTransaction {
   @override
   Future<void> rollback() async {
     if (isCompleted) {
-      throw const AnySqlException('Transaction is already completed.');
+      throw const AnySqlConnectionException(
+        'Transaction is already completed.',
+      );
     }
 
     await _connection.execute(pg.Sql('ROLLBACK'));

@@ -1,10 +1,7 @@
 import 'anysql_result.dart';
 
-/// An open database connection created by an [AnySqlDriver].
-abstract interface class AnySqlConnection {
-  /// Whether this connection can still accept queries.
-  bool get isOpen;
-
+/// Something that can execute a normalized AnySQL statement or command.
+abstract interface class AnySqlQueryExecutor {
   /// Runs a statement or command and returns a normalized result.
   ///
   /// SQL drivers generally treat [statement] as SQL. Document database drivers
@@ -14,6 +11,12 @@ abstract interface class AnySqlConnection {
     String statement, {
     Map<String, Object?> parameters = const {},
   });
+}
+
+/// An open database connection created by an [AnySqlDriver].
+abstract interface class AnySqlConnection implements AnySqlQueryExecutor {
+  /// Whether this connection can still accept queries.
+  bool get isOpen;
 
   /// Runs work inside a database transaction.
   ///
@@ -29,8 +32,9 @@ abstract interface class AnySqlConnection {
 }
 
 /// A transaction scoped to one [AnySqlConnection].
-abstract interface class AnySqlTransaction {
+abstract interface class AnySqlTransaction implements AnySqlQueryExecutor {
   /// Runs a statement or command within this transaction.
+  @override
   Future<AnySqlResult> query(
     String statement, {
     Map<String, Object?> parameters = const {},

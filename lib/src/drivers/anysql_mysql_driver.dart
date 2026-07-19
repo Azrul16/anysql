@@ -14,7 +14,15 @@ import 'driver_helpers.dart';
 /// milliseconds.
 final class MysqlAnySqlDriver extends AnySqlDriverBase {
   /// Creates a MySQL driver.
-  const MysqlAnySqlDriver() : super('mysql', AnySqlDialect.mysql);
+  const MysqlAnySqlDriver()
+    : super(
+        'mysql',
+        AnySqlDialect.mysql,
+        capabilities: const AnySqlCapabilities(
+          transactions: true,
+          upsert: true,
+        ),
+      );
 
   @override
   Future<AnySqlConnection> connect(AnySqlConfig config) async {
@@ -43,7 +51,7 @@ final class MysqlAnySqlDriver extends AnySqlDriverBase {
     } on AnySqlException {
       rethrow;
     } on Object catch (error) {
-      throw AnySqlException('Failed to connect to MySQL.', error);
+      throw AnySqlConnectionException('Failed to connect to MySQL.', error);
     }
   }
 }
@@ -163,7 +171,9 @@ final class _MysqlAnySqlTransaction implements AnySqlTransaction {
   @override
   Future<void> commit() async {
     if (isCompleted) {
-      throw const AnySqlException('Transaction is already completed.');
+      throw const AnySqlConnectionException(
+        'Transaction is already completed.',
+      );
     }
 
     await _connection.execute('COMMIT');
@@ -176,7 +186,9 @@ final class _MysqlAnySqlTransaction implements AnySqlTransaction {
     Map<String, Object?> parameters = const {},
   }) async {
     if (isCompleted) {
-      throw const AnySqlException('Transaction is already completed.');
+      throw const AnySqlConnectionException(
+        'Transaction is already completed.',
+      );
     }
 
     try {
@@ -200,7 +212,9 @@ final class _MysqlAnySqlTransaction implements AnySqlTransaction {
   @override
   Future<void> rollback() async {
     if (isCompleted) {
-      throw const AnySqlException('Transaction is already completed.');
+      throw const AnySqlConnectionException(
+        'Transaction is already completed.',
+      );
     }
 
     await _connection.execute('ROLLBACK');

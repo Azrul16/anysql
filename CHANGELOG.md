@@ -1,3 +1,30 @@
+## 0.3.1
+
+### Added
+
+- Added optional driver capability declarations for transactions, returned
+  write rows, upserts, and native aggregation.
+- Added `AnySqlUnsupportedException` for optional operations unavailable on a
+  driver, backend, or store dialect.
+- Added `AnySqlStore.transaction()` with a transaction-scoped keyword store.
+- Added store field projection plus `count()` and `exists()` query helpers.
+- Added bulk `addAll()` writes and `whereNotIn` filters for SQL and MongoDB.
+
+### Changed
+
+- Unsupported MongoDB and HTTP backend transactions now throw
+  `AnySqlUnsupportedException` instead of a connection exception.
+
+### Fixed
+
+- Declared the external-integration test tag so local test runs are warning-free.
+- Standardized driver selection, connection lifecycle, and completed
+  transaction failures on their specific exception types.
+- Made offset-only store queries valid for MySQL and SQLite by emitting their
+  dialect-specific unlimited limit clauses.
+- Changed SQLite document `set` operations to use `ON CONFLICT DO UPDATE`
+  instead of the delete-and-insert behavior of `INSERT OR REPLACE`.
+
 ## 0.3.0
 
 ### Added

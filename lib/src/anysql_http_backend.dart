@@ -128,7 +128,7 @@ final class _AnySqlHttpBackendConnection implements AnySqlConnection {
   Future<T> transaction<T>(
     Future<T> Function(AnySqlTransaction transaction) action,
   ) {
-    throw const AnySqlConnectionException(
+    throw const AnySqlUnsupportedException(
       'HTTP backend transactions require backend-specific support. '
       'Expose a transaction-aware backend command and call it with query().',
     );

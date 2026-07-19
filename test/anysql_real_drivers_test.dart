@@ -16,6 +16,16 @@ void main() {
     }
   });
 
+  test('built-in drivers declare optional capabilities', () {
+    expect(const PostgresAnySqlDriver().capabilities.transactions, isTrue);
+    expect(const PostgresAnySqlDriver().capabilities.returningRows, isTrue);
+    expect(const MysqlAnySqlDriver().capabilities.transactions, isTrue);
+    expect(const MysqlAnySqlDriver().capabilities.returningRows, isFalse);
+    expect(const SqliteAnySqlDriver().capabilities.upsert, isTrue);
+    expect(const MongodbAnySqlDriver().capabilities.aggregation, isTrue);
+    expect(const MongodbAnySqlDriver().capabilities.transactions, isFalse);
+  });
+
   test('mysql driver validates option types before connecting', () async {
     await expectLater(
       const MysqlAnySqlDriver().connect(
@@ -211,7 +221,7 @@ void main() {
 
     await expectLater(
       connection.query('select 1'),
-      throwsA(isA<AnySqlException>()),
+      throwsA(isA<AnySqlConnectionException>()),
     );
   });
 }

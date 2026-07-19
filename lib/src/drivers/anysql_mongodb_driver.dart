@@ -13,7 +13,12 @@ import 'driver_helpers.dart';
 /// complete URI yourself, set `options: {'uri': 'mongodb://...'}`.
 final class MongodbAnySqlDriver extends AnySqlDriverBase {
   /// Creates a MongoDB driver.
-  const MongodbAnySqlDriver() : super('mongodb', AnySqlDialect.mongodb);
+  const MongodbAnySqlDriver()
+    : super(
+        'mongodb',
+        AnySqlDialect.mongodb,
+        capabilities: const AnySqlCapabilities(upsert: true, aggregation: true),
+      );
 
   @override
   Future<AnySqlConnection> connect(AnySqlConfig config) async {
@@ -24,7 +29,7 @@ final class MongodbAnySqlDriver extends AnySqlDriverBase {
       await db.open(secure: config.sslEnabled);
       return MongodbAnySqlConnection(db);
     } on Object catch (error) {
-      throw AnySqlException('Failed to connect to MongoDB.', error);
+      throw AnySqlConnectionException('Failed to connect to MongoDB.', error);
     }
   }
 }
@@ -167,7 +172,7 @@ final class MongodbAnySqlConnection implements AnySqlConnection {
             {'count': _countValue(count)},
           ]);
         default:
-          throw AnySqlException(
+          throw AnySqlUnsupportedException(
             'Unsupported MongoDB operation: ${parsed.operation}.',
           );
       }
@@ -185,7 +190,7 @@ final class MongodbAnySqlConnection implements AnySqlConnection {
   Future<T> transaction<T>(
     Future<T> Function(AnySqlTransaction transaction) action,
   ) {
-    throw const AnySqlConnectionException(
+    throw const AnySqlUnsupportedException(
       'MongoDB transactions are not supported by this driver because '
       'package:mongo_dart does not expose client sessions.',
     );

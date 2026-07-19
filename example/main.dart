@@ -1,4 +1,5 @@
 import 'package:anysql/anysql.dart';
+import 'package:anysql/anysql_drivers.dart';
 
 Future<void> main() async {
   print('anysql example');
@@ -57,16 +58,27 @@ Future<void> runBackendAnySqlExample(AnySqlOptions options) async {
 }
 
 Future<void> runKeywordStoreExample() async {
-  print('\n3. Keyword store pattern over any connection');
+  print('\n3. Keyword store pattern over real in-memory SQLite');
 
-  final connection = _ExampleConnection(source: 'keyword store connection');
+  final connection = await AnySql.connect(
+    config: AnySqlConfig.sqlite(database: ':memory:'),
+    driver: const SqliteAnySqlDriver(),
+  );
 
   try {
-    final db = connection.store(dialect: AnySqlDialect.postgres);
+    final db = connection.store(dialect: AnySqlDialect.sqlite);
+    await connection.query(
+      'create table users ('
+      'id integer primary key, '
+      'email text not null, '
+      'active integer not null'
+      ')',
+    );
+    await db.collection('users').add({'email': 'ada@example.com', 'active': 1});
 
     final result = await db
         .collection('users')
-        .where('active', isEqualTo: true)
+        .where('active', isEqualTo: 1)
         .limit(10)
         .get();
     print(result.firstOrNull);
@@ -90,7 +102,7 @@ final class ExampleBackendClient implements AnySqlBackendClient {
   @override
   Future<AnySqlConnection> connect(AnySqlOptions options) async {
     if (!options.hasBackend) {
-      throw const AnySqlException('Backend URL is required.');
+      throw const AnySqlConfigException('Backend URL is required.');
     }
 
     return _ExampleConnection(source: 'backend proxy at ${options.backendUri}');
@@ -117,7 +129,7 @@ final class _ExampleConnection implements AnySqlConnection {
     Map<String, Object?> parameters = const {},
   }) async {
     if (!_isOpen) {
-      throw const AnySqlException('Connection is closed.');
+      throw const AnySqlConnectionException('Connection is closed.');
     }
 
     return AnySqlResult.rows([
@@ -130,7 +142,7 @@ final class _ExampleConnection implements AnySqlConnection {
     Future<T> Function(AnySqlTransaction transaction) action,
   ) async {
     if (!_isOpen) {
-      throw const AnySqlException('Connection is closed.');
+      throw const AnySqlConnectionException('Connection is closed.');
     }
 
     final transaction = _ExampleTransaction(this);
@@ -179,7 +191,9 @@ final class _ExampleTransaction implements AnySqlTransaction {
 
   void _checkActive() {
     if (isCompleted) {
-      throw const AnySqlException('Transaction is already completed.');
+      throw const AnySqlConnectionException(
+        'Transaction is already completed.',
+      );
     }
   }
 }

@@ -81,6 +81,31 @@ void main() {
     await _expectAnalyzeSuccess(output);
   });
 
+  test('cli configure creates analyzable options for every dialect', () async {
+    final arguments = <String, List<String>>{
+      'postgres': ['--host', 'localhost', '--database', 'app'],
+      'mysql': ['--host', 'localhost', '--database', 'app'],
+      'sqlite': ['--database', ':memory:'],
+      'mongodb': ['--host', 'localhost', '--database', 'app'],
+    };
+
+    for (final entry in arguments.entries) {
+      final output = '${generatedRoot.path}/cli_${entry.key}_audit.dart';
+      final result = await _runCli([
+        'configure',
+        '--dialect',
+        entry.key,
+        ...entry.value,
+        '--output',
+        output,
+        '--force',
+      ]);
+
+      expect(result.exitCode, 0, reason: result.stderr.toString());
+      await _expectAnalyzeSuccess(output);
+    }
+  });
+
   test('cli setup creates an analyzable options file from prompts', () async {
     final output = '${generatedRoot.path}/cli_setup_options.dart';
     final result = await _runCliWithInput(
@@ -142,6 +167,25 @@ void main() {
 
     expect(result.exitCode, 64);
     expect(result.stderr.toString(), contains('Unsupported option for sqlite'));
+  });
+
+  test('cli protects existing generated files without force', () async {
+    final output = '${generatedRoot.path}/existing_options.dart';
+    File(output).writeAsStringSync('// keep me\n');
+
+    final result = await _runCli([
+      'configure',
+      '--dialect',
+      'sqlite',
+      '--database',
+      'app.db',
+      '--output',
+      output,
+    ]);
+
+    expect(result.exitCode, 73);
+    expect(File(output).readAsStringSync(), '// keep me\n');
+    expect(result.stderr.toString(), contains('--force'));
   });
 }
 

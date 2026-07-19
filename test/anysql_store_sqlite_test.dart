@@ -60,4 +60,84 @@ void main() {
       await connection.close();
     }
   });
+
+  test(
+    'SQLite document set updates without deleting the existing row',
+    () async {
+      final connection = await AnySql.connect(
+        config: AnySqlConfig.sqlite(database: ':memory:'),
+        driver: const SqliteAnySqlDriver(),
+      );
+      final store = connection.store(dialect: AnySqlDialect.sqlite);
+
+      try {
+        await connection.query(
+          'create table users (id integer primary key, name text not null)',
+        );
+        await connection.query(
+          'create table delete_audit (user_id integer not null)',
+        );
+        await connection.query(
+          'create trigger audit_user_delete after delete on users '
+          'begin insert into delete_audit (user_id) values (old.id); end',
+        );
+        await store.collection('users').doc(1).set({'name': 'Ada'});
+
+        await store.collection('users').doc(1).set({'name': 'Grace'});
+
+        expect(await store.collection('users').doc(1).first(), {
+          'id': 1,
+          'name': 'Grace',
+        });
+        expect(
+          (await connection.query('select * from delete_audit')).rows,
+          isEmpty,
+        );
+      } finally {
+        await connection.close();
+      }
+    },
+  );
+
+  test('store transactions commit and roll back keyword operations', () async {
+    final connection = await AnySql.connect(
+      config: AnySqlConfig.sqlite(database: ':memory:'),
+      driver: const SqliteAnySqlDriver(),
+    );
+    final store = connection.store(dialect: AnySqlDialect.sqlite);
+
+    try {
+      await connection.query(
+        'create table users (id integer primary key, name text not null)',
+      );
+
+      await store.transaction((transaction) async {
+        await transaction.collection('users').add({'name': 'Ada'});
+      });
+      await expectLater(
+        store.transaction((transaction) async {
+          await transaction.collection('users').add({'name': 'Grace'});
+          throw StateError('roll back');
+        }),
+        throwsStateError,
+      );
+
+      expect((await store.collection('users').get()).rows, [
+        {'id': 1, 'name': 'Ada'},
+      ]);
+      expect(await store.collection('users').count(), 1);
+      expect(
+        await store
+            .collection('users')
+            .where('name', isEqualTo: 'Ada')
+            .exists(),
+        isTrue,
+      );
+      expect(await store.collection('users').select(['name']).first(), {
+        'name': 'Ada',
+      });
+    } finally {
+      await connection.close();
+    }
+  });
 }
