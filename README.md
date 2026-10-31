@@ -27,6 +27,12 @@ macOS, and Windows; browser/web support is not advertised. CI builds a Flutter
 consumer app for each native target, alongside Dart unit and live-driver tests.
 Build checks verify compilation; they do not replace testing on your devices.
 
+The repository commits `pubspec.lock` for reproducible development and CI.
+Resolve lockfile updates with Dart 3.10.0 so the locked dependencies remain
+compatible with the minimum supported SDK. CI uses
+`dart pub get --enforce-lockfile` on both SDK versions. Applications consuming
+this package resolve their own dependencies from `pubspec.yaml`.
+
 Upgrading from 0.3.x? Read the [migration guide](doc/migration_1_0_1.md) for
 backend payload and transaction changes.
 
