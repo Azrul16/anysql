@@ -46,7 +46,10 @@ final class SqliteAnySqlDriver extends AnySqlDriverBase {
 ///
 /// Positional SQL parameters are read from `parameters['values']` when that
 /// value is an iterable. Otherwise, map values are passed to SQLite in insertion
-/// order.
+/// order. Each query accepts one prepared statement. Read-only statements
+/// report zero affected rows; writes include affected counts even with RETURNING.
+/// Prefer RETURNING for identifiers: lastInsertId is set when SQLite's most
+/// recent insert row ID changes.
 final class SqliteAnySqlConnection implements AnySqlConnection {
   /// Wraps an existing SQLite [database].
   SqliteAnySqlConnection(this.database);
@@ -55,11 +58,14 @@ final class SqliteAnySqlConnection implements AnySqlConnection {
   final sqlite.Database database;
   var _isOpen = true;
 
+  final _guard = ConnectionOperationGuard();
+
   @override
   bool get isOpen => _isOpen;
 
   @override
   Future<void> close() async {
+    _guard.checkIdle();
     if (_isOpen) {
       database.close();
       _isOpen = false;
@@ -72,6 +78,7 @@ final class SqliteAnySqlConnection implements AnySqlConnection {
     Map<String, Object?> parameters = const {},
   }) async {
     _checkOpen();
+    _guard.startQuery();
     try {
       return _sqliteQuery(database, statement, _sqliteParameters(parameters));
     } on AnySqlException {
@@ -81,6 +88,8 @@ final class SqliteAnySqlConnection implements AnySqlConnection {
         'Failed to execute SQLite query: ${statementPreview(statement)}',
         error,
       );
+    } finally {
+      _guard.endQuery();
     }
   }
 
@@ -89,24 +98,32 @@ final class SqliteAnySqlConnection implements AnySqlConnection {
     Future<T> Function(AnySqlTransaction transaction) action,
   ) async {
     _checkOpen();
+    _guard.startTransaction();
     try {
-      database.execute('BEGIN TRANSACTION');
-    } on Object catch (error) {
-      throw AnySqlQueryException('Failed to start SQLite transaction.', error);
-    }
-    final transaction = _SqliteAnySqlTransaction(database);
+      try {
+        database.execute('BEGIN TRANSACTION');
+      } on Object catch (error) {
+        throw AnySqlQueryException(
+          'Failed to start SQLite transaction.',
+          error,
+        );
+      }
+      final transaction = _SqliteAnySqlTransaction(database);
 
-    try {
-      final value = await action(transaction);
-      if (!transaction.isCompleted) {
-        await transaction.commit();
+      try {
+        final value = await action(transaction);
+        if (!transaction.isCompleted) {
+          await transaction.commit();
+        }
+        return value;
+      } catch (_) {
+        if (!transaction.isCompleted) {
+          await transaction.rollback();
+        }
+        rethrow;
       }
-      return value;
-    } catch (_) {
-      if (!transaction.isCompleted) {
-        await transaction.rollback();
-      }
-      rethrow;
+    } finally {
+      _guard.endTransaction();
     }
   }
 
@@ -177,121 +194,30 @@ AnySqlResult _sqliteQuery(
   String statement,
   List<Object?> parameters,
 ) {
-  final trimmed = statement.trimLeft().toLowerCase();
-  if (trimmed.startsWith('select') ||
-      trimmed.startsWith('with') ||
-      trimmed.startsWith('pragma') ||
-      _hasTopLevelReturningClause(trimmed)) {
-    final result = database.select(statement, parameters);
-    return AnySqlResult.rows(
-      result.map((row) => Map<String, Object?>.from(row)).toList(),
-      metadata: {'columns': result.columnNames},
+  final prepared = database.prepare(statement, checkNoTail: true);
+  try {
+    final readOnly = prepared.isReadOnly;
+    final changesBefore =
+        database.select('select total_changes()').first.values.first as int;
+    final insertIdBefore = database.lastInsertRowId;
+    final result = prepared.select(parameters);
+    final changesAfter =
+        database.select('select total_changes()').first.values.first as int;
+    final affectedRows = !readOnly && changesAfter > changesBefore
+        ? database.updatedRows
+        : 0;
+    final insertId = database.lastInsertRowId;
+    return AnySqlResult(
+      rows: result.map((row) => Map<String, Object?>.from(row)).toList(),
+      affectedRows: affectedRows,
+      lastInsertId: !readOnly && insertId != insertIdBefore ? insertId : null,
+      metadata: result.columnNames.isEmpty
+          ? const {}
+          : {'columns': result.columnNames},
     );
+  } finally {
+    prepared.close();
   }
-
-  database.execute(statement, parameters);
-  return AnySqlResult.command(
-    affectedRows: database.updatedRows,
-    lastInsertId: database.lastInsertRowId == 0
-        ? null
-        : database.lastInsertRowId,
-  );
-}
-
-bool _hasTopLevelReturningClause(String statement) {
-  var depth = 0;
-  for (var index = 0; index < statement.length; index += 1) {
-    final codeUnit = statement.codeUnitAt(index);
-
-    if (codeUnit == 0x27) {
-      index = _skipQuoted(statement, index, 0x27);
-      continue;
-    }
-    if (codeUnit == 0x22) {
-      index = _skipQuoted(statement, index, 0x22);
-      continue;
-    }
-    if (codeUnit == 0x60) {
-      index = _skipQuoted(statement, index, 0x60);
-      continue;
-    }
-    if (_startsWith(statement, index, '--')) {
-      index = _skipLineComment(statement, index);
-      continue;
-    }
-    if (_startsWith(statement, index, '/*')) {
-      index = _skipBlockComment(statement, index);
-      continue;
-    }
-    if (codeUnit == 0x28) {
-      depth += 1;
-      continue;
-    }
-    if (codeUnit == 0x29 && depth > 0) {
-      depth -= 1;
-      continue;
-    }
-    if (depth == 0 && _startsWithWord(statement, index, 'returning')) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-int _skipQuoted(String statement, int start, int quote) {
-  for (var index = start + 1; index < statement.length; index += 1) {
-    if (statement.codeUnitAt(index) != quote) {
-      continue;
-    }
-    if (index + 1 < statement.length &&
-        statement.codeUnitAt(index + 1) == quote) {
-      index += 1;
-      continue;
-    }
-    return index;
-  }
-
-  return statement.length - 1;
-}
-
-int _skipLineComment(String statement, int start) {
-  final newline = statement.indexOf('\n', start + 2);
-  return newline == -1 ? statement.length - 1 : newline;
-}
-
-int _skipBlockComment(String statement, int start) {
-  final end = statement.indexOf('*/', start + 2);
-  return end == -1 ? statement.length - 1 : end + 1;
-}
-
-bool _startsWith(String statement, int index, String value) {
-  return index + value.length <= statement.length &&
-      statement.substring(index, index + value.length) == value;
-}
-
-bool _startsWithWord(String statement, int index, String word) {
-  if (!_startsWith(statement, index, word)) {
-    return false;
-  }
-
-  final before = index == 0 ? null : statement.codeUnitAt(index - 1);
-  final afterIndex = index + word.length;
-  final after = afterIndex >= statement.length
-      ? null
-      : statement.codeUnitAt(afterIndex);
-
-  return !_isIdentifierCodeUnit(before) && !_isIdentifierCodeUnit(after);
-}
-
-bool _isIdentifierCodeUnit(int? codeUnit) {
-  if (codeUnit == null) {
-    return false;
-  }
-
-  return (codeUnit >= 0x30 && codeUnit <= 0x39) ||
-      (codeUnit >= 0x61 && codeUnit <= 0x7A) ||
-      codeUnit == 0x5F;
 }
 
 List<Object?> _sqliteParameters(Map<String, Object?> parameters) {

@@ -1,0 +1,55 @@
+name: Flutter platforms
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: android
+            command: flutter build apk --debug
+          - os: ubuntu-latest
+            platform: linux
+            command: flutter build linux --debug
+          - os: macos-latest
+            platform: ios
+            command: flutter build ios --debug --no-codesign
+          - os: macos-latest
+            platform: macos
+            command: flutter build macos --debug
+          - os: windows-latest
+            platform: windows
+            command: flutter build windows --debug
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        if: matrix.platform == 'android'
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Install Linux build dependencies
+        if: matrix.platform == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libstdc++-12-dev
+      - name: Create consumer app
+        shell: bash
+        run: |
+          flutter create --project-name anysql_smoke --platforms=${{ matrix.platform }} .dart_tool/flutter_smoke
+          cd .dart_tool/flutter_smoke
+          flutter pub add 'anysql:{path: ../..}'
+          cp ../../tool/flutter_smoke_main.dart.txt lib/main.dart
+          flutter analyze lib/main.dart
+      - name: Build consumer app
+        working-directory: .dart_tool/flutter_smoke
+        run: ${{ matrix.command }}

@@ -1,4 +1,4 @@
-# anysql Example
+# anysql 1.0.1 Example
 
 This example is designed to run immediately after `dart pub get`. It shows the
 three ways people usually use the `anysql` package: direct driver access
@@ -96,3 +96,16 @@ dart -DANYSQL_PASSWORD=your_password run example/main.dart
 ```
 
 Project repository: [github.com/Azrul16/anysql](https://github.com/Azrul16/anysql)
+
+## Transactions and write results
+
+The runnable SQLite example also uses a transaction-scoped store and a
+commented `INSERT ... RETURNING` query. Use the callback's store or executor
+for transaction work; parent queries are rejected while the callback is active.
+Returned write results include both rows and `affectedRows`.
+
+The real HTTP backend client sends only host, port, database, username, and SSL
+status as config metadata. Configure credential-bearing driver options on your
+backend. The example backend is a fake client and sends no network requests.
+
+See [migration notes](../doc/migration_1_0_1.md) when upgrading from 0.3.x.

@@ -1,3 +1,36 @@
+## 1.0.1
+
+### Fixed
+
+- Restricted HTTP backend config metadata to host, port, database, username,
+  and SSL status. Driver options, including credential-bearing MongoDB URIs,
+  are no longer forwarded. Backends must configure driver options server-side.
+- Replaced SQLite SQL-prefix heuristics with prepared statements so commented
+  reads, EXPLAIN, CTE writes, and RETURNING statements execute correctly.
+- Reported SQLite affected rows for CTE and RETURNING writes, while avoiding
+  stale counts on reads and schema changes.
+- Rejected parent-connection queries, closure, nested transactions, and
+  overlapping transaction starts during SQLite, PostgreSQL, and MySQL
+  transactions. Pending parent queries must finish before a transaction starts.
+- Formatted the external-driver tests to satisfy CI.
+
+### Added
+
+- Regression coverage for backend credential filtering, SQLite query results,
+  write metadata, transaction guards, and connection reuse after rollback.
+- Flutter consumer build checks for Android, iOS, Linux, macOS, and Windows.
+- A migration guide for upgrading from 0.3.x.
+
+### Migration
+
+- Configure database driver options on the backend; HTTP requests no longer
+  contain a `config.options` field.
+- Use the callback's transaction executor or transaction store for all work
+  inside a transaction. Await pending queries before starting a transaction.
+- SQLite query calls execute one prepared statement at a time. Split SQL
+  scripts into individual calls. Returned write rows now include affected-row
+  counts; reads no longer expose a previous write's insert ID.
+
 ## 0.3.1
 
 ### Added

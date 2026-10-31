@@ -61,6 +61,60 @@ void main() {
     });
   });
 
+  test('http backend only sends allowlisted config metadata', () async {
+    late Map<String, dynamic> body;
+    final client = MockClient((request) async {
+      body = jsonDecode(request.body) as Map<String, dynamic>;
+      return http.Response('{}', 200);
+    });
+    addTearDown(client.close);
+    final config = AnySqlConfig.mongodb(
+      host: 'db.example.com',
+      port: 27018,
+      database: 'app',
+      username: 'app_user',
+      password: 'database-secret',
+      sslEnabled: true,
+      options: {
+        'uri': 'mongodb://user:uri-secret@db.example.com/app',
+        'token': 'token-secret',
+        'nested': {'password': 'nested-secret'},
+        'timeoutMs': 10000,
+      },
+    );
+    final connection = await AnySqlHttpBackendClient(client: client).connect(
+      AnySqlOptions(
+        config: config,
+        backendUri: Uri.parse('https://api.example.com/anysql'),
+      ),
+    );
+    addTearDown(connection.close);
+
+    await connection.query(
+      'users.find',
+      parameters: {
+        'filter': {'active': true},
+      },
+    );
+
+    expect(body, {
+      'dialect': 'mongodb',
+      'config': {
+        'host': 'db.example.com',
+        'port': 27018,
+        'database': 'app',
+        'username': 'app_user',
+        'sslEnabled': true,
+      },
+      'statement': 'users.find',
+      'parameters': {
+        'filter': {'active': true},
+      },
+    });
+    expect(config.password, 'database-secret');
+    expect(config.options['uri'], contains('uri-secret'));
+  });
+
   test('http backend requires backend URL', () async {
     final options = AnySqlOptions(
       config: AnySqlConfig.sqlite(database: ':memory:'),

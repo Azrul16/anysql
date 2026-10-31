@@ -189,6 +189,116 @@ void main() {
     }
   });
 
+  test(
+    'sqlite prepares commented reads, CTE writes, and returning writes',
+    () async {
+      final connection = await const SqliteAnySqlDriver().connect(
+        AnySqlConfig.sqlite(database: ':memory:'),
+      );
+      addTearDown(connection.close);
+      await connection.query(
+        'create table items (id integer primary key, value text)',
+      );
+      final inserted = await connection.query(
+        "/* insert */ with v as (select 'first' as value) "
+        'insert into items(value) select value from v returning id, value',
+      );
+      expect(inserted.affectedRows, 1);
+      expect(inserted.lastInsertId, 1);
+      expect(inserted.first, {'id': 1, 'value': 'first'});
+      for (final prefix in ['-- read\n', '/* read */ ', '']) {
+        final read = await connection.query('${prefix}select * from items');
+        expect(read.rowCount, 1);
+        expect(read.affectedRows, 0);
+        expect(read.lastInsertId, isNull);
+      }
+      expect(
+        (await connection.query(
+          'explain query plan select * from items',
+        )).rowCount,
+        greaterThan(0),
+      );
+      await expectLater(
+        connection.query(
+          "insert into items(value) values ('ignored'); select * from items",
+        ),
+        throwsA(isA<AnySqlQueryException>()),
+      );
+      expect((await connection.query('select * from items')).rowCount, 1);
+      final updated = await connection.query(
+        "with v as (select 'second' as value) update items set value = (select value from v)",
+      );
+      expect(updated.affectedRows, 1);
+      expect(updated.lastInsertId, isNull);
+      final returned = await connection.query(
+        "update items set value = 'third' returning value",
+      );
+      expect(returned.affectedRows, 1);
+      expect(returned.first, {'value': 'third'});
+      final missing = await connection.query(
+        'delete from items where id = 999 returning id',
+      );
+      expect(missing.rows, isEmpty);
+      expect(missing.affectedRows, 0);
+      final deleted = await connection.query('delete from items returning id');
+      expect(deleted.affectedRows, 1);
+      expect(deleted.first, {'id': 1});
+      final ddl = await connection.query('create table other (id integer)');
+      expect(ddl.affectedRows, 0);
+      await connection.transaction((tx) async {
+        final write = await tx.query(
+          "insert into items(value) values ('transaction') returning id",
+        );
+        expect(write.affectedRows, 1);
+        expect(write.rowCount, 1);
+      });
+    },
+  );
+
+  test(
+    'sqlite rejects parent operations and nested transactions while active',
+    () async {
+      final connection = await const SqliteAnySqlDriver().connect(
+        AnySqlConfig.sqlite(database: ':memory:'),
+      );
+      addTearDown(connection.close);
+      late AnySqlTransaction completed;
+      await connection.transaction((tx) async {
+        completed = tx;
+        await expectLater(
+          connection.query('select 1'),
+          throwsA(isA<AnySqlConnectionException>()),
+        );
+        await expectLater(
+          connection.close(),
+          throwsA(isA<AnySqlConnectionException>()),
+        );
+        await expectLater(
+          connection.transaction((_) async {}),
+          throwsA(isA<AnySqlConnectionException>()),
+        );
+        expect((await tx.query('select 1 as value')).first['value'], 1);
+        await tx.commit();
+        await expectLater(
+          connection.query('select 1'),
+          throwsA(isA<AnySqlConnectionException>()),
+        );
+      });
+      await expectLater(
+        completed.query('select 1'),
+        throwsA(isA<AnySqlConnectionException>()),
+      );
+      await expectLater(
+        connection.transaction((_) async {
+          throw StateError('rollback');
+        }),
+        throwsStateError,
+      );
+      expect((await connection.query('select 1')).rowCount, 1);
+      await connection.transaction((tx) => tx.query('select 1'));
+    },
+  );
+
   test('sqlite driver wraps query errors', () async {
     final connection = await AnySql.connect(
       config: AnySqlConfig.sqlite(database: ':memory:'),

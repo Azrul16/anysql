@@ -39,8 +39,9 @@ final result = await connection.query(
 ```
 
 The client posts JSON to `AnySqlOptions.backendUri`. It includes the statement,
-parameters, dialect, and non-secret config values. It intentionally omits
-`AnySqlConfig.password`.
+parameters, dialect, and only these config fields: `host`, `port`, `database`,
+`username`, and `sslEnabled`. It excludes `AnySqlConfig.password` and all
+driver-specific `options`, including credential-bearing connection URIs.
 
 The backend must authenticate callers and authorize statements or commands.
 Do not treat omission of the database password as sufficient protection for an
@@ -56,8 +57,7 @@ Example request body:
     "port": 5432,
     "database": "app",
     "username": "postgres",
-    "sslEnabled": false,
-    "options": {}
+    "sslEnabled": false
   },
   "statement": "users.findById",
   "parameters": {"id": 1}
@@ -306,3 +306,16 @@ drivers such as `postgres`, `mysql_client`, `sqlite3`, and `mongo_dart` expose
 database-specific behavior directly. `anysql` sits underneath those kinds of
 choices as a small common contract for configuration, connection lifetime,
 results, backend proxy access, and driver swapping.
+
+## Version 1.0.1 behavior
+
+See the [migration guide](migration_1_0_1.md) before upgrading from 0.3.x.
+SQLite executes one prepared statement per query. Leading comments and CTEs
+are supported, and writes with `RETURNING` provide both rows and affected-row
+counts. Read-only statements report zero affected rows.
+
+SQLite, PostgreSQL, and MySQL connections reject parent queries, closure, and
+nested transactions while a transaction callback is active. Use its transaction
+executor, and await pending queries before starting a transaction. The public
+underlying driver handles bypass these guards; do not mix direct handle access
+with managed transactions.

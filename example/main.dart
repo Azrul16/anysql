@@ -2,7 +2,7 @@ import 'package:anysql/anysql.dart';
 import 'package:anysql/anysql_drivers.dart';
 
 Future<void> main() async {
-  print('anysql example');
+  print('anysql 1.0.1 example');
   print('-------------');
 
   final options = AnySqlOptions(
@@ -75,6 +75,18 @@ Future<void> runKeywordStoreExample() async {
       ')',
     );
     await db.collection('users').add({'email': 'ada@example.com', 'active': 1});
+
+    // Use the transaction-scoped store for every operation in the callback.
+    await db.transaction((tx) async {
+      await tx.collection('users').doc(1).update({'active': 1});
+    });
+
+    final inserted = await connection.query(
+      '/* prepared statement */ '
+      'insert into users(email, active) values (?, ?) returning id',
+      parameters: AnySqlParameters.positional(['grace@example.com', 1]),
+    );
+    print('Inserted ${inserted.affectedRows} row: ${inserted.first}');
 
     final result = await db
         .collection('users')

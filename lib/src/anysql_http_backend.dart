@@ -13,7 +13,8 @@ import 'anysql_result.dart';
 ///
 /// The client sends `POST` requests to [AnySqlOptions.backendUri]. The request
 /// body includes the query statement, parameters, and non-secret config
-/// metadata. Passwords are intentionally not sent.
+/// metadata: host, port, database, username, and sslEnabled. Database passwords
+/// and driver-specific options are excluded from config metadata.
 ///
 /// Expected response body:
 ///
@@ -150,7 +151,6 @@ Map<String, Object?> _safeConfig(AnySqlConfig config) {
     'database': config.database,
     'username': config.username,
     'sslEnabled': config.sslEnabled,
-    'options': config.options,
   };
 }
 

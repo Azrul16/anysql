@@ -23,6 +23,9 @@ abstract interface class AnySqlConnection implements AnySqlQueryExecutor {
   /// Implementations commit when [action] completes and roll back when it
   /// throws. Nested transactions and savepoints are not part of the shared
   /// contract; drivers may reject or define their own behavior for them.
+  /// Built-in SQLite, PostgreSQL, and MySQL drivers reject parent queries,
+  /// closure, and another transaction until the callback finishes. Use the
+  /// supplied transaction executor and await pending parent queries first.
   Future<T> transaction<T>(
     Future<T> Function(AnySqlTransaction transaction) action,
   );

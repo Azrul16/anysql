@@ -99,11 +99,14 @@ final class MysqlAnySqlConnection implements AnySqlConnection {
   /// Underlying MySQL connection.
   final mysql.MySQLConnection connection;
 
+  final _guard = ConnectionOperationGuard();
+
   @override
   bool get isOpen => connection.connected;
 
   @override
   Future<void> close() async {
+    _guard.checkIdle();
     if (connection.connected) {
       await connection.close();
     }
@@ -115,6 +118,7 @@ final class MysqlAnySqlConnection implements AnySqlConnection {
     Map<String, Object?> parameters = const {},
   }) async {
     _checkOpen();
+    _guard.startQuery();
 
     try {
       final result = await connection.execute(
@@ -130,6 +134,8 @@ final class MysqlAnySqlConnection implements AnySqlConnection {
         'Failed to execute MySQL query: ${statementPreview(statement)}',
         error,
       );
+    } finally {
+      _guard.endQuery();
     }
   }
 
@@ -138,20 +144,25 @@ final class MysqlAnySqlConnection implements AnySqlConnection {
     Future<T> Function(AnySqlTransaction transaction) action,
   ) async {
     _checkOpen();
-    await connection.execute('START TRANSACTION');
-    final transaction = _MysqlAnySqlTransaction(connection);
-
+    _guard.startTransaction();
     try {
-      final value = await action(transaction);
-      if (!transaction.isCompleted) {
-        await transaction.commit();
+      await connection.execute('START TRANSACTION');
+      final transaction = _MysqlAnySqlTransaction(connection);
+
+      try {
+        final value = await action(transaction);
+        if (!transaction.isCompleted) {
+          await transaction.commit();
+        }
+        return value;
+      } catch (_) {
+        if (!transaction.isCompleted) {
+          await transaction.rollback();
+        }
+        rethrow;
       }
-      return value;
-    } catch (_) {
-      if (!transaction.isCompleted) {
-        await transaction.rollback();
-      }
-      rethrow;
+    } finally {
+      _guard.endTransaction();
     }
   }
 

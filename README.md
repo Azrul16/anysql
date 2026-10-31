@@ -20,6 +20,16 @@ instead of writing raw SQL or MongoDB commands in every feature.
 > normally call a secure backend API instead of shipping production database
 > credentials inside the app.
 
+## Version 1.0.1
+
+Requires Dart 3.10 or newer. Native Flutter targets are Android, iOS, Linux,
+macOS, and Windows; browser/web support is not advertised. CI builds a Flutter
+consumer app for each native target, alongside Dart unit and live-driver tests.
+Build checks verify compilation; they do not replace testing on your devices.
+
+Upgrading from 0.3.x? Read the [migration guide](doc/migration_1_0_1.md) for
+backend payload and transaction changes.
+
 ## Quick Start
 
 Install:
@@ -38,7 +48,7 @@ Or add the current release directly to `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  anysql: ^0.3.1
+  anysql: ^1.0.1
 ```
 
 Then run `dart pub get` or `flutter pub get`. Import the core API from
@@ -371,8 +381,9 @@ final users = await db.collection('users').where('active', isEqualTo: true).get(
 ```
 
 `AnySqlHttpBackendClient` sends `POST` requests to `backendUri` with the
-statement, parameters, and non-secret config metadata. It does not send the
-database password from `AnySqlConfig`.
+statement, parameters, and an explicit set of config metadata fields: `host`,
+`port`, `database`, `username`, and `sslEnabled`. The config metadata excludes
+`password` and all driver-specific `options`, which can contain credentials.
 
 The backend endpoint must authenticate callers and authorize every operation.
 Do not expose an unrestricted raw SQL proxy to untrusted applications.
@@ -506,6 +517,17 @@ logs are useful without accidentally printing secrets.
 back when it throws. The shared contract does not include nested transactions
 or savepoints; if you need those, use the underlying database package directly
 or add a custom driver behavior for your project.
+
+For SQLite, PostgreSQL, and MySQL, use only the callback's transaction executor
+(or transaction store) inside the callback. Parent connection queries, closing
+that connection, and starting another transaction are rejected with
+`AnySqlConnectionException` until the callback finishes. Await pending parent
+queries before starting a transaction.
+
+SQLite executes one statement per query call. Prepared statements handle leading
+comments, CTEs, and `RETURNING`. Writes expose `affectedRows` even when they
+return rows; reads report zero affected rows. Use returned primary-key columns
+when you need reliable identifiers from writes.
 
 ## Register Multiple Drivers
 

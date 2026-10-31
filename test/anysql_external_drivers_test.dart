@@ -8,30 +8,27 @@ import 'package:anysql/anysql_drivers.dart';
 import 'package:test/test.dart';
 
 void main() {
-  test(
-    'postgres driver runs a live smoke query',
-    () async {
-      final connection = await AnySql.connect(
-        config: AnySqlConfig.postgres(
-          host: _env('ANYSQL_POSTGRES_HOST')!,
-          port: _envInt('ANYSQL_POSTGRES_PORT') ?? 5432,
-          database: _env('ANYSQL_POSTGRES_DATABASE') ?? 'postgres',
-          username: _env('ANYSQL_POSTGRES_USERNAME'),
-          password: _env('ANYSQL_POSTGRES_PASSWORD'),
-          sslEnabled: _envBool('ANYSQL_POSTGRES_SSL'),
-        ),
-        driver: const PostgresAnySqlDriver(),
-      );
+  test('postgres driver runs a live smoke query', () async {
+    final connection = await AnySql.connect(
+      config: AnySqlConfig.postgres(
+        host: _env('ANYSQL_POSTGRES_HOST')!,
+        port: _envInt('ANYSQL_POSTGRES_PORT') ?? 5432,
+        database: _env('ANYSQL_POSTGRES_DATABASE') ?? 'postgres',
+        username: _env('ANYSQL_POSTGRES_USERNAME'),
+        password: _env('ANYSQL_POSTGRES_PASSWORD'),
+        sslEnabled: _envBool('ANYSQL_POSTGRES_SSL'),
+      ),
+      driver: const PostgresAnySqlDriver(),
+    );
 
-      try {
-        final result = await connection.query('select 1 as value');
-        expect(result.first['value'], 1);
-      } finally {
-        await connection.close();
-      }
-    },
-    skip: _skipUnless('ANYSQL_POSTGRES_HOST'),
-  );
+    try {
+      final result = await connection.query('select 1 as value');
+      expect(result.first['value'], 1);
+      await _checkTransactionIsolation(connection);
+    } finally {
+      await connection.close();
+    }
+  }, skip: _skipUnless('ANYSQL_POSTGRES_HOST'));
 
   test('mysql driver runs a live smoke query', () async {
     final connection = await AnySql.connect(
@@ -49,37 +46,34 @@ void main() {
     try {
       final result = await connection.query('select 1 as value');
       expect(result.first['value'].toString(), '1');
+      await _checkTransactionIsolation(connection);
     } finally {
       await connection.close();
     }
   }, skip: _skipUnless('ANYSQL_MYSQL_HOST'));
 
-  test(
-    'mongodb driver runs a live smoke command',
-    () async {
-      final uri = _env('ANYSQL_MONGODB_URI');
-      final connection = await AnySql.connect(
-        config: AnySqlConfig.mongodb(
-          host: _env('ANYSQL_MONGODB_HOST') ?? 'localhost',
-          port: _envInt('ANYSQL_MONGODB_PORT') ?? 27017,
-          database: _env('ANYSQL_MONGODB_DATABASE') ?? 'test',
-          username: _env('ANYSQL_MONGODB_USERNAME'),
-          password: _env('ANYSQL_MONGODB_PASSWORD'),
-          sslEnabled: _envBool('ANYSQL_MONGODB_SSL'),
-          options: uri == null ? const {} : {'uri': uri},
-        ),
-        driver: const MongodbAnySqlDriver(),
-      );
+  test('mongodb driver runs a live smoke command', () async {
+    final uri = _env('ANYSQL_MONGODB_URI');
+    final connection = await AnySql.connect(
+      config: AnySqlConfig.mongodb(
+        host: _env('ANYSQL_MONGODB_HOST') ?? 'localhost',
+        port: _envInt('ANYSQL_MONGODB_PORT') ?? 27017,
+        database: _env('ANYSQL_MONGODB_DATABASE') ?? 'test',
+        username: _env('ANYSQL_MONGODB_USERNAME'),
+        password: _env('ANYSQL_MONGODB_PASSWORD'),
+        sslEnabled: _envBool('ANYSQL_MONGODB_SSL'),
+        options: uri == null ? const {} : {'uri': uri},
+      ),
+      driver: const MongodbAnySqlDriver(),
+    );
 
-      try {
-        final result = await connection.query('anysql_smoke.count');
-        expect(result.first['count'], isA<int>());
-      } finally {
-        await connection.close();
-      }
-    },
-    skip: _skipUnlessAny(['ANYSQL_MONGODB_HOST', 'ANYSQL_MONGODB_URI']),
-  );
+    try {
+      final result = await connection.query('anysql_smoke.count');
+      expect(result.first['count'], isA<int>());
+    } finally {
+      await connection.close();
+    }
+  }, skip: _skipUnlessAny(['ANYSQL_MONGODB_HOST', 'ANYSQL_MONGODB_URI']));
 }
 
 String? _env(String name) {
@@ -115,4 +109,48 @@ String? _skipUnlessAny(List<String> names) {
   }
 
   return 'Set one of ${names.join(', ')} to run this live driver test.';
+}
+
+Future<void> _checkTransactionIsolation(AnySqlConnection connection) async {
+  late AnySqlTransaction completed;
+  final pending = connection.transaction((tx) async {
+    completed = tx;
+    await expectLater(
+      connection.query('select 1'),
+      throwsA(isA<AnySqlConnectionException>()),
+    );
+    await expectLater(
+      connection.close(),
+      throwsA(isA<AnySqlConnectionException>()),
+    );
+    await expectLater(
+      connection.transaction((_) async {}),
+      throwsA(isA<AnySqlConnectionException>()),
+    );
+    expect((await tx.query('select 1')).rowCount, 1);
+  });
+  // The connection must be guarded even while BEGIN is awaiting a response.
+  await expectLater(
+    connection.query('select 1'),
+    throwsA(isA<AnySqlConnectionException>()),
+  );
+  await pending;
+  await expectLater(
+    completed.query('select 1'),
+    throwsA(isA<AnySqlConnectionException>()),
+  );
+  await expectLater(
+    connection.transaction((_) async {
+      throw StateError('rollback');
+    }),
+    throwsStateError,
+  );
+  expect((await connection.query('select 1')).rowCount, 1);
+  final inFlight = connection.query('select 1');
+  await expectLater(
+    connection.transaction((_) async {}),
+    throwsA(isA<AnySqlConnectionException>()),
+  );
+  await inFlight;
+  await connection.transaction((tx) => tx.query('select 1'));
 }

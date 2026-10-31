@@ -1,0 +1,24 @@
+import 'package:anysql/anysql.dart';
+import 'package:anysql/anysql_drivers.dart';
+import 'package:flutter/material.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final connection = await const SqliteAnySqlDriver().connect(
+    AnySqlConfig.sqlite(database: ':memory:'),
+  );
+  try {
+    final result = await connection.query('/* smoke */ select 1 as value');
+    if (result.first['value'] != 1) throw StateError('SQLite smoke query failed');
+  } finally {
+    await connection.close();
+  }
+  final backend = await AnySqlHttpBackendClient().connect(
+    AnySqlOptions(
+      config: AnySqlConfig.sqlite(database: ':memory:'),
+      backendUri: Uri.parse('https://example.com/anysql'),
+    ),
+  );
+  await backend.close();
+  runApp(const MaterialApp(home: Scaffold(body: Text('AnySQL ready'))));
+}

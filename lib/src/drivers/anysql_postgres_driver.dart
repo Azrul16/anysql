@@ -64,12 +64,15 @@ final class PostgresAnySqlConnection implements AnySqlConnection {
   /// Underlying PostgreSQL connection.
   final pg.Connection connection;
 
+  final _guard = ConnectionOperationGuard();
+
   @override
   bool get isOpen => connection.isOpen;
 
   @override
-  Future<void> close() {
-    return connection.close();
+  Future<void> close() async {
+    _guard.checkIdle();
+    await connection.close();
   }
 
   @override
@@ -78,6 +81,7 @@ final class PostgresAnySqlConnection implements AnySqlConnection {
     Map<String, Object?> parameters = const {},
   }) async {
     _checkOpen();
+    _guard.startQuery();
 
     try {
       final result = await connection.execute(
@@ -93,6 +97,8 @@ final class PostgresAnySqlConnection implements AnySqlConnection {
         'Failed to execute PostgreSQL query: ${statementPreview(statement)}',
         error,
       );
+    } finally {
+      _guard.endQuery();
     }
   }
 
@@ -101,20 +107,25 @@ final class PostgresAnySqlConnection implements AnySqlConnection {
     Future<T> Function(AnySqlTransaction transaction) action,
   ) async {
     _checkOpen();
-    await connection.execute(pg.Sql('BEGIN'));
-    final transaction = _PostgresAnySqlTransaction(connection);
-
+    _guard.startTransaction();
     try {
-      final value = await action(transaction);
-      if (!transaction.isCompleted) {
-        await transaction.commit();
+      await connection.execute(pg.Sql('BEGIN'));
+      final transaction = _PostgresAnySqlTransaction(connection);
+
+      try {
+        final value = await action(transaction);
+        if (!transaction.isCompleted) {
+          await transaction.commit();
+        }
+        return value;
+      } catch (_) {
+        if (!transaction.isCompleted) {
+          await transaction.rollback();
+        }
+        rethrow;
       }
-      return value;
-    } catch (_) {
-      if (!transaction.isCompleted) {
-        await transaction.rollback();
-      }
-      rethrow;
+    } finally {
+      _guard.endTransaction();
     }
   }
 
