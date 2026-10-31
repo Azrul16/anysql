@@ -73,7 +73,11 @@ jobs:
           mysql -uroot -p${{ github.run_id }}
           -e "ALTER USER 'root'@'%' IDENTIFIED WITH mysql_native_password BY '${{ github.run_id }}'; FLUSH PRIVILEGES;"
       - run: dart pub get
-      - run: dart format --output=none --set-exit-if-changed .
+      # Formatter output can change between SDK releases. Keep one formatting
+      # authority while checking analysis and behavior on both supported SDKs.
+      - name: Check formatting with the stable SDK
+        if: matrix.sdk == 'stable'
+        run: dart format --output=none --set-exit-if-changed .
       - run: dart analyze
       - name: Run unit tests
         run: dart test --exclude-tags external
