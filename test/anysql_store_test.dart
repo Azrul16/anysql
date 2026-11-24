@@ -28,21 +28,46 @@ void main() {
     });
   });
 
-  test('store compiles MySQL document set as upsert', () async {
-    final connection = _RecordingConnection();
-    final store = AnySqlStore(connection, dialect: AnySqlDialect.mysql);
+  test(
+    'MySQL document set locks the ID and inserts when it is missing',
+    () async {
+      final connection = _RecordingConnection();
+      final store = AnySqlStore(connection, dialect: AnySqlDialect.mysql);
 
-    await store.collection('users').doc(1).set({'name': 'Ada', 'active': true});
+      connection.nextResult = AnySqlResult();
+      await store.collection('users').doc(1).set({
+        'name': 'Ada',
+        'active': true,
+      });
 
-    expect(
-      connection.lastStatement,
-      'insert into `users` (`name`, `active`, `id`) '
-      'values (:p0, :p1, :p2) '
-      'on duplicate key update `name` = values(`name`), '
-      '`active` = values(`active`)',
-    );
-    expect(connection.lastParameters, {'p0': 'Ada', 'p1': true, 'p2': 1});
-  });
+      expect(connection.statements, [
+        'select 1 from `users` where `id` = :p0 for update',
+        'insert into `users` (`name`, `active`, `id`) values (:p0, :p1, :p2)',
+      ]);
+      expect(connection.lastParameters, {'p0': 'Ada', 'p1': true, 'p2': 1});
+    },
+  );
+
+  test(
+    'MySQL document set updates by ID inside an existing transaction',
+    () async {
+      final connection = _RecordingConnection();
+      final store = AnySqlStore(connection, dialect: AnySqlDialect.mysql);
+      connection.nextResult = AnySqlResult.rows([
+        {'1': 1},
+      ]);
+
+      await store.transaction(
+        (tx) => tx.collection('users').doc(1).set({'name': 'Ada'}),
+      );
+
+      expect(
+        connection.lastStatement,
+        'update `users` set `name` = :p0 where `id` = :p1',
+      );
+      expect(connection.lastParameters, {'p0': 'Ada', 'p1': 1});
+    },
+  );
 
   test('store compiles offset without limit for each SQL dialect', () async {
     final cases = <AnySqlDialect, String>{
@@ -181,6 +206,22 @@ void main() {
     });
   });
 
+  test('MongoDB document set sends a replacement with upsert', () async {
+    final connection = _RecordingConnection();
+    final store = AnySqlStore(connection, dialect: AnySqlDialect.mongodb);
+
+    await store.collection('users', idField: '_id').doc('abc').set({
+      'name': 'Ada',
+    });
+
+    expect(connection.lastStatement, 'users.replaceOne');
+    expect(connection.lastParameters, {
+      'filter': {'_id': 'abc'},
+      'replacement': {'name': 'Ada', '_id': 'abc'},
+      'upsert': true,
+    });
+  });
+
   test('store validates identifiers before building commands', () async {
     final store = AnySqlStore(
       _RecordingConnection(),
@@ -212,6 +253,7 @@ void main() {
 
 final class _RecordingConnection implements AnySqlConnection {
   String? lastStatement;
+  final statements = <String>[];
   Map<String, Object?>? lastParameters;
   var _isOpen = true;
   AnySqlResult? nextResult;
@@ -230,6 +272,7 @@ final class _RecordingConnection implements AnySqlConnection {
     Map<String, Object?> parameters = const {},
   }) async {
     lastStatement = statement;
+    statements.add(statement);
     lastParameters = parameters;
     return nextResult ?? AnySqlResult.command(affectedRows: 1);
   }
@@ -238,6 +281,24 @@ final class _RecordingConnection implements AnySqlConnection {
   Future<T> transaction<T>(
     Future<T> Function(AnySqlTransaction transaction) action,
   ) {
-    throw UnimplementedError();
+    return action(_RecordingTransaction(this));
   }
+}
+
+final class _RecordingTransaction implements AnySqlTransaction {
+  _RecordingTransaction(this.connection);
+
+  final _RecordingConnection connection;
+
+  @override
+  Future<AnySqlResult> query(
+    String statement, {
+    Map<String, Object?> parameters = const {},
+  }) => connection.query(statement, parameters: parameters);
+
+  @override
+  Future<void> commit() async {}
+
+  @override
+  Future<void> rollback() async {}
 }

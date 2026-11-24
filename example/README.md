@@ -1,111 +1,42 @@
-# anysql 1.0.1 Example
+# AnySQL examples
 
-This example is designed to run immediately after `dart pub get`. It shows the
-three ways people usually use the `anysql` package: direct driver access
-through a driver interface, backend/proxy access for Flutter apps, and
-Firebase-style keyword calls.
+Choose an example based on what you're building. Each Dart file runs on its own
+from the repository root after `dart pub get`.
 
-Run it:
+| I want to… | Example | Run it |
+| --- | --- | --- |
+| Query collections and documents with the Firebase-style API | [Keyword store](https://github.com/Azrul16/anysql/blob/main/example/keyword_store.dart) | `dart run example/keyword_store.dart` |
+| Connect directly and run parameterized SQL | [Direct SQL queries](https://github.com/Azrul16/anysql/blob/main/example/direct_queries.dart) | `dart run example/direct_queries.dart` |
+| Commit related writes together | [Transactions](https://github.com/Azrul16/anysql/blob/main/example/transactions.dart) | `dart run example/transactions.dart` |
+| Call an HTTP backend from a Flutter app | [HTTP backend](https://github.com/Azrul16/anysql/blob/main/example/http_backend.dart) | `dart run example/http_backend.dart` |
+| Register a driver for my own adapter | [Custom driver](https://github.com/Azrul16/anysql/blob/main/example/custom_driver.dart) | `dart run example/custom_driver.dart` |
 
-```sh
-dart run example/main.dart
-```
+The SQL examples use in-memory SQLite. The HTTP and custom driver examples
+simulate their server and driver locally, so all five run without external
+services. Run `dart run example/main.dart` to try them together.
 
-It prints three sections:
+## Generate options in your app
 
-- a direct connection through a fake PostgreSQL-style driver,
-- a backend/proxy connection through a fake backend client,
-- a keyword-store query over a real in-memory SQLite database.
-
-The first two sections are fake on purpose, and SQLite runs entirely in memory,
-so you can learn the API without running PostgreSQL, MySQL, MongoDB, or a
-backend locally. Direct database drivers are available from
-`package:anysql/anysql_drivers.dart`.
-
-## Keyword API
-
-```dart
-final db = connection.store(dialect: AnySqlDialect.sqlite);
-
-await db.collection('users').add({'email': 'ada@example.com', 'active': 1});
-
-final result = await db
-    .collection('users')
-    .where('active', isEqualTo: 1)
-    .limit(10)
-    .get();
-```
-
-## Generated Options
-
-Create your own `lib/anysql_options.dart`:
+From your app's root directory, add the dependency and launch the setup wizard.
+For a Dart app, use `dart pub add anysql` in place of `flutter pub add anysql`.
 
 ```sh
+flutter pub add anysql
 dart run anysql
 ```
 
-Then use the generated helper:
+The wizard creates `lib/anysql_options.dart` with `DefaultAnySqlOptions`.
+Choose **SQLite** during setup to use the direct examples, and use
+`DefaultAnySqlOptions.connectStore(driver: const SqliteAnySqlDriver())` to open
+the store with your generated settings.
 
-```dart
-final db = await DefaultAnySqlOptions.connectStore(
-  driver: const SqliteAnySqlDriver(),
-);
+For a Flutter app with an HTTP backend, configure the backend URL in your
+generated options and use
+`DefaultAnySqlOptions.connectBackendStore(client: AnySqlHttpBackendClient())`.
+Keep database credentials on your server.
 
-try {
-  final users = await db.collection('users').limit(20).get();
-} finally {
-  await db.close();
-}
-```
+For scripted setup, use `dart run anysql configure --help`. To generate a
+template with placeholder configurations for all built-in databases, use
+`dart run anysql init`.
 
-For Flutter mobile apps, keep credentials on your server and use the generated
-backend helper:
-
-```dart
-final db = await DefaultAnySqlOptions.connectBackendStore(
-  client: AnySqlHttpBackendClient(),
-);
-
-try {
-  final user = await db.collection('users').doc(1).first();
-} finally {
-  await db.close();
-}
-```
-
-Do not ship production database passwords inside a Flutter mobile app.
-
-## More CLI Commands
-
-Create a sample options file for all built-in databases:
-
-```sh
-dart run anysql init
-```
-
-Create a one-database options file:
-
-```sh
-dart run anysql configure --dialect postgres --host localhost --database app
-```
-
-If you use `--password-env ANYSQL_PASSWORD`, pass the password at runtime:
-
-```sh
-dart -DANYSQL_PASSWORD=your_password run example/main.dart
-```
-
-Project repository: [github.com/Azrul16/anysql](https://github.com/Azrul16/anysql)
-
-## Transactions and write results
-
-The runnable SQLite example also uses a transaction-scoped store and a
-commented `INSERT ... RETURNING` query. Use the callback's store or executor
-for transaction work; parent queries are rejected while the callback is active.
-Returned write results include both rows and `affectedRows`.
-
-The real HTTP backend client sends only host, port, database, username, and SSL
-status as config metadata. Configure credential-bearing driver options on your
-backend. The example backend is a fake client and sends no network requests.
-
-See [migration notes](../doc/migration_1_0_1.md) when upgrading from 0.3.x.
+[Quick start and driver-specific configuration](https://pub.dev/packages/anysql#quick-start)

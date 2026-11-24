@@ -189,6 +189,48 @@ void main() {
     }
   });
 
+  test('sqlite preserves the error when a statement rolls back', () async {
+    final connection = await const SqliteAnySqlDriver().connect(
+      AnySqlConfig.sqlite(database: ':memory:'),
+    );
+    addTearDown(connection.close);
+    await connection.query('create table users (id integer primary key)');
+
+    late AnySqlTransaction completed;
+    for (final catchInCallback in [false, true]) {
+      await expectLater(
+        connection.transaction((tx) async {
+          completed = tx;
+          await tx.query('insert into users values (1)');
+          try {
+            await tx.query('insert or rollback into users values (1)');
+          } on AnySqlQueryException {
+            if (!catchInCallback) rethrow;
+          }
+        }),
+        throwsA(
+          isA<AnySqlQueryException>().having(
+            (error) => error.cause.toString(),
+            'cause',
+            contains('UNIQUE constraint failed'),
+          ),
+        ),
+      );
+    }
+
+    expect((await connection.query('select * from users')).rows, isEmpty);
+    await connection.transaction((tx) async {
+      await expectLater(
+        completed.query('select 1'),
+        throwsA(isA<AnySqlConnectionException>()),
+      );
+      await tx.query('insert into users values (2)');
+    });
+    expect((await connection.query('select * from users')).rows, [
+      {'id': 2},
+    ]);
+  });
+
   test(
     'sqlite prepares commented reads, CTE writes, and returning writes',
     () async {

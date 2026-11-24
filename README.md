@@ -20,7 +20,7 @@ instead of writing raw SQL or MongoDB commands in every feature.
 > normally call a secure backend API instead of shipping production database
 > credentials inside the app.
 
-## Version 1.0.1
+## Version 1.0.2
 
 Requires Dart 3.10 or newer. Native Flutter targets are Android, iOS, Linux,
 macOS, and Windows; browser/web support is not advertised. CI builds a Flutter
@@ -35,6 +35,9 @@ this package resolve their own dependencies from `pubspec.yaml`.
 
 Upgrading from 0.3.x? Read the [migration guide](doc/migration_1_0_1.md) for
 backend payload and transaction changes.
+
+For changes to MySQL connections, TLS, and transactions in 1.0.2, see the
+[changelog](CHANGELOG.md).
 
 ## Quick Start
 
@@ -54,7 +57,7 @@ Or add the current release directly to `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  anysql: ^1.0.1
+  anysql: ^1.0.2
 ```
 
 Then run `dart pub get` or `flutter pub get`. Import the core API from
@@ -217,6 +220,19 @@ Supported keyword operations:
 - `add(data)` and `addAll(data)` for inserts
 - `doc(id).get()`, `doc(id).set(data)`, `doc(id).first()`,
   `doc(id).update(data)`, and `doc(id).delete()`
+
+`doc(id).set(data)` inserts a missing record. For an existing record,
+PostgreSQL, MySQL, and SQLite update the supplied columns and preserve omitted
+columns. MongoDB replaces the document, dropping omitted fields other than
+`_id`. Supply values sufficient for a SQL insert, including required columns
+without defaults. PostgreSQL and SQLite check those requirements even for an
+existing record. Use `doc(id).update(data)` for partial edits to existing
+records.
+
+MySQL `set()` requires a unique ID field and a transaction-capable connection
+to lock the target row before writing. The built-in HTTP backend exposes no
+transaction support, so a MySQL-backed HTTP app can expose an authorized
+server-side command that runs the operation on a direct MySQL connection.
 
 SQL identifiers are validated before commands are built. Collection/table and
 field names must use letters, numbers, and underscores, starting with a letter
@@ -415,7 +431,7 @@ Import `package:anysql/anysql_drivers.dart` to use direct drivers.
 | Driver | Backing package | Best fit | Parameter style | Notes |
 | --- | --- | --- | --- | --- |
 | PostgreSQL | `postgres` | Dart servers, CLIs, workers | named `@id` parameters | Supports SSL through `sslEnabled` |
-| MySQL | `mysql_client` | Dart servers, CLIs, workers | `mysql_client` map parameters | `options` supports `collation` and `timeoutMs` |
+| MySQL | `mysql_dart` | Dart servers, CLIs, workers | Named map parameters | `options` supports `collation`, `timeoutMs`, and `securityContext` |
 | SQLite | `sqlite3` | local native apps, CLIs, tests | positional `values` list | `:memory:` is ideal for tests and examples |
 | MongoDB | `mongo_dart` | Dart servers, CLIs, workers | document maps | Uses `collection.operation` statement names |
 
@@ -478,7 +494,7 @@ final connection = await AnySql.connect(
 );
 ```
 
-MySQL parameter behavior follows `package:mysql_client`.
+MySQL parameter behavior follows `package:mysql_dart`.
 
 ### MongoDB
 
@@ -623,7 +639,7 @@ See the
 for longer direct-driver documentation.
 
 See the
-[runnable example](https://github.com/Azrul16/anysql/blob/main/example/main.dart)
+[runnable examples by feature](https://github.com/Azrul16/anysql/tree/main/example)
 that covers:
 
 - a fake direct PostgreSQL-style driver,

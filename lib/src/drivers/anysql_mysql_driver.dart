@@ -1,4 +1,6 @@
-import 'package:mysql_client/mysql_client.dart' as mysql;
+import 'dart:io';
+
+import 'package:mysql_dart/mysql_dart.dart' as mysql;
 
 import '../anysql_config.dart';
 import '../anysql_connection.dart';
@@ -7,11 +9,11 @@ import '../anysql_exception.dart';
 import '../anysql_result.dart';
 import 'driver_helpers.dart';
 
-/// Real MySQL driver backed by `package:mysql_client`.
+/// Real MySQL driver backed by `package:mysql_dart`.
 ///
 /// Supported driver-specific [AnySqlConfig.options] keys are `collation` for a
 /// MySQL collation string and `timeoutMs` for the connection timeout in
-/// milliseconds.
+/// milliseconds, and `securityContext` for custom TLS trust roots.
 final class MysqlAnySqlDriver extends AnySqlDriverBase {
   /// Creates a MySQL driver.
   const MysqlAnySqlDriver()
@@ -34,6 +36,12 @@ final class MysqlAnySqlDriver extends AnySqlDriverBase {
       defaultValue: 'utf8mb4_general_ci',
     );
     final timeoutMs = _intOption(config, 'timeoutMs', defaultValue: 10000);
+    final securityContext = config.options['securityContext'];
+    if (securityContext != null && securityContext is! SecurityContext) {
+      throw const AnySqlConfigException(
+        'MySQL option "securityContext" must be a SecurityContext.',
+      );
+    }
 
     try {
       final connection = await mysql.MySQLConnection.createConnection(
@@ -42,6 +50,8 @@ final class MysqlAnySqlDriver extends AnySqlDriverBase {
         userName: config.username ?? '',
         password: config.password ?? '',
         secure: config.sslEnabled,
+        securityContext: securityContext as SecurityContext?,
+        verifyServerCertificate: true,
         databaseName: config.database,
         collation: collation,
       );
@@ -90,7 +100,7 @@ int _intOption(AnySqlConfig config, String key, {required int defaultValue}) {
 
 /// AnySQL connection backed by a MySQL connection.
 ///
-/// Query parameter handling follows `package:mysql_client` behavior. Values are
+/// Query parameter handling follows `package:mysql_dart` behavior. Values are
 /// forwarded as a `Map<String, dynamic>` when parameters are provided.
 final class MysqlAnySqlConnection implements AnySqlConnection {
   /// Wraps an existing MySQL [connection].

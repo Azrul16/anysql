@@ -62,7 +62,7 @@ void main() {
   });
 
   test(
-    'SQLite document set updates without deleting the existing row',
+    'SQLite document set preserves omitted columns and does not delete the row',
     () async {
       final connection = await AnySql.connect(
         config: AnySqlConfig.sqlite(database: ':memory:'),
@@ -72,7 +72,8 @@ void main() {
 
       try {
         await connection.query(
-          'create table users (id integer primary key, name text not null)',
+          'create table users (id integer primary key, name text not null, '
+          'note text)',
         );
         await connection.query(
           'create table delete_audit (user_id integer not null)',
@@ -81,13 +82,17 @@ void main() {
           'create trigger audit_user_delete after delete on users '
           'begin insert into delete_audit (user_id) values (old.id); end',
         );
-        await store.collection('users').doc(1).set({'name': 'Ada'});
+        await store.collection('users').doc(1).set({
+          'name': 'Ada',
+          'note': 'keep this',
+        });
 
         await store.collection('users').doc(1).set({'name': 'Grace'});
 
         expect(await store.collection('users').doc(1).first(), {
           'id': 1,
           'name': 'Grace',
+          'note': 'keep this',
         });
         expect(
           (await connection.query('select * from delete_audit')).rows,

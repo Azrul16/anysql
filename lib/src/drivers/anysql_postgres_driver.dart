@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:postgres/postgres.dart' as pg;
 
 import '../anysql_config.dart';
@@ -12,6 +14,7 @@ import 'driver_helpers.dart';
 /// This driver uses [AnySqlConfig.host], [AnySqlConfig.port],
 /// [AnySqlConfig.database], [AnySqlConfig.username], [AnySqlConfig.password],
 /// and [AnySqlConfig.sslEnabled] to open a PostgreSQL connection.
+/// Set the `securityContext` driver option to trust a private certificate authority.
 final class PostgresAnySqlDriver extends AnySqlDriverBase {
   /// Creates a PostgreSQL driver.
   const PostgresAnySqlDriver()
@@ -28,6 +31,12 @@ final class PostgresAnySqlDriver extends AnySqlDriverBase {
   @override
   Future<AnySqlConnection> connect(AnySqlConfig config) async {
     checkSupported(config);
+    final securityContext = config.options['securityContext'];
+    if (securityContext != null && securityContext is! SecurityContext) {
+      throw const AnySqlConfigException(
+        'PostgreSQL option "securityContext" must be a SecurityContext.',
+      );
+    }
 
     try {
       final connection = await pg.Connection.open(
@@ -39,7 +48,10 @@ final class PostgresAnySqlDriver extends AnySqlDriverBase {
           password: config.password,
         ),
         settings: pg.ConnectionSettings(
-          sslMode: config.sslEnabled ? pg.SslMode.require : pg.SslMode.disable,
+          sslMode: config.sslEnabled
+              ? pg.SslMode.verifyFull
+              : pg.SslMode.disable,
+          securityContext: securityContext as SecurityContext?,
         ),
       );
 
@@ -141,6 +153,7 @@ final class _PostgresAnySqlTransaction implements AnySqlTransaction {
 
   final pg.Connection _connection;
   var isCompleted = false;
+  (AnySqlQueryException, StackTrace)? _serverFailure;
 
   @override
   Future<void> commit() async {
@@ -150,6 +163,19 @@ final class _PostgresAnySqlTransaction implements AnySqlTransaction {
       );
     }
 
+    final failure = _serverFailure;
+    if (failure != null) {
+      // A failed statement can abort the whole transaction. Check it before
+      // COMMIT, which would otherwise silently roll back the writes.
+      try {
+        await _connection.execute(pg.Sql('SELECT 1'));
+      } on pg.ServerException catch (error) {
+        if (error.code == '25P02') {
+          Error.throwWithStackTrace(failure.$1, failure.$2);
+        }
+        rethrow;
+      }
+    }
     await _connection.execute(pg.Sql('COMMIT'));
     isCompleted = true;
   }
@@ -174,12 +200,16 @@ final class _PostgresAnySqlTransaction implements AnySqlTransaction {
       return _postgresResult(result);
     } on AnySqlException {
       rethrow;
-    } on Object catch (error) {
-      throw AnySqlQueryException(
+    } on Object catch (error, stack) {
+      final wrapped = AnySqlQueryException(
         'Failed to execute PostgreSQL transaction query: '
         '${statementPreview(statement)}',
         error,
       );
+      if (error is pg.ServerException) {
+        _serverFailure ??= (wrapped, stack);
+      }
+      Error.throwWithStackTrace(wrapped, stack);
     }
   }
 

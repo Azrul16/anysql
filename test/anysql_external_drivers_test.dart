@@ -25,6 +25,24 @@ void main() {
       final result = await connection.query('select 1 as value');
       expect(result.first['value'], 1);
       await _checkTransactionIsolation(connection);
+      await connection.query(
+        'create temporary table anysql_rollback_test (id integer primary key)',
+      );
+      await expectLater(
+        connection.transaction((tx) async {
+          await tx.query('insert into anysql_rollback_test values (1)');
+          try {
+            await tx.query('insert into anysql_rollback_test values (1)');
+          } on AnySqlQueryException {
+            // The callback returns normally after the server aborted its tx.
+          }
+        }),
+        throwsA(isA<AnySqlQueryException>()),
+      );
+      expect(
+        (await connection.query('select * from anysql_rollback_test')).rows,
+        isEmpty,
+      );
     } finally {
       await connection.close();
     }
@@ -47,6 +65,23 @@ void main() {
       final result = await connection.query('select 1 as value');
       expect(result.first['value'].toString(), '1');
       await _checkTransactionIsolation(connection);
+      await connection.query(
+        'create temporary table anysql_set_test (id integer primary key, '
+        'email varchar(100) not null unique, name varchar(100) not null) '
+        'engine=InnoDB',
+      );
+      final users = connection
+          .store(dialect: AnySqlDialect.mysql)
+          .collection('anysql_set_test');
+      await users.doc(1).set({'email': 'ada@example.com', 'name': 'Ada'});
+      await expectLater(
+        users.doc(2).set({'email': 'ada@example.com', 'name': 'Grace'}),
+        throwsA(isA<AnySqlQueryException>()),
+      );
+      expect((await users.doc(1).first())?['name'], 'Ada');
+      expect(await users.doc(2).first(), isNull);
+      await users.doc(1).set({'name': 'Ada Lovelace'});
+      expect((await users.doc(1).first())?['name'], 'Ada Lovelace');
     } finally {
       await connection.close();
     }
@@ -70,6 +105,37 @@ void main() {
     try {
       final result = await connection.query('anysql_smoke.count');
       expect(result.first['count'], isA<int>());
+      final marker = DateTime.now().microsecondsSinceEpoch.toString();
+      final documents = connection
+          .store(dialect: AnySqlDialect.mongodb)
+          .collection('anysql_smoke', idField: '_id');
+      try {
+        final inserted = await documents.add({'anysqlTestRun': marker});
+        expect(inserted.affectedRows, 1);
+        expect(inserted.lastInsertId, isNotNull);
+        expect(
+          (await documents
+              .doc(inserted.lastInsertId)
+              .first())?['anysqlTestRun'],
+          marker,
+        );
+        final bulk = await documents.addAll([
+          {'anysqlTestRun': marker},
+          {'anysqlTestRun': marker},
+        ]);
+        expect(bulk.affectedRows, 2);
+        expect(
+          await documents.where('anysqlTestRun', isEqualTo: marker).count(),
+          3,
+        );
+      } finally {
+        await connection.query(
+          'anysql_smoke.deleteMany',
+          parameters: {
+            'filter': {'anysqlTestRun': marker},
+          },
+        );
+      }
     } finally {
       await connection.close();
     }

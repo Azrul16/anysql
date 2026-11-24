@@ -91,11 +91,13 @@ final class MongodbAnySqlConnection implements AnySqlConnection {
           );
           return AnySqlResult.rows(row == null ? const [] : _mongoRows([row]));
         case 'insertOne':
-          final document = _requiredDocument(parameters, 'document');
+          final document = Map<String, dynamic>.of(
+            _requiredDocument(parameters, 'document'),
+          );
           final result = await collection.insertOne(document);
           return AnySqlResult.command(
             affectedRows: result.nInserted,
-            lastInsertId: document['_id'],
+            lastInsertId: result.id,
             metadata: _writeMetadata(result),
           );
         case 'insertMany':
@@ -294,7 +296,7 @@ List<Map<String, dynamic>> _requiredDocuments(
       throw AnySqlException('MongoDB "$key" entries must be maps.');
     }
 
-    return document;
+    return Map<String, dynamic>.of(document);
   }).toList();
 }
 

@@ -466,7 +466,16 @@ final class AnySqlDocumentReference {
     return (await get()).firstOrNull;
   }
 
-  /// Creates or replaces this document/row.
+  /// Inserts a document or row if it does not exist. Supply values sufficient
+  /// for an insert, including required SQL columns without a default.
+  ///
+  /// On an existing record, MongoDB replaces the document and drops omitted
+  /// fields other than `_id`. PostgreSQL, MySQL, and SQLite update the supplied
+  /// columns and preserve omitted columns. Use [update] to modify fields on
+  /// an existing record across all four dialects.
+  ///
+  /// MySQL requires a transaction-capable connection and a unique
+  /// [AnySqlCollectionReference.idField].
   Future<AnySqlResult> set(Map<String, Object?> data) {
     final checkedData = _checkedData({...data, _collection.idField: id});
     if (checkedData.length == 1) {
@@ -482,13 +491,44 @@ final class AnySqlDocumentReference {
           'upsert': true,
         }),
       ),
+      AnySqlDialect.mysql => _setMysql(checkedData),
       AnySqlDialect.postgres ||
-      AnySqlDialect.mysql ||
       AnySqlDialect.sqlite => _collection._runSql(_sqlSet(checkedData)),
       AnySqlDialect.custom => throw const AnySqlUnsupportedException(
         'AnySqlStore does not know how to compile custom dialect writes.',
       ),
     };
+  }
+
+  Future<AnySqlResult> _setMysql(Map<String, Object?> data) {
+    final executor = _collection._executor;
+    if (executor is AnySqlTransaction) {
+      return _setMysqlInTransaction(executor, data);
+    }
+    return (executor as AnySqlConnection).transaction(
+      (transaction) => _setMysqlInTransaction(transaction, data),
+    );
+  }
+
+  Future<AnySqlResult> _setMysqlInTransaction(
+    AnySqlTransaction transaction,
+    Map<String, Object?> data,
+  ) async {
+    final builder = _SqlBuilder(AnySqlDialect.mysql);
+    final table = builder.identifier(_collection.name);
+    final idColumn = builder.identifier(_collection.idField);
+    final idParameter = builder.addParameter(id);
+    final lookup = builder.command(
+      'select 1 from $table where $idColumn = $idParameter for update',
+    );
+    final existing = await transaction.query(
+      lookup.statement,
+      parameters: lookup.parameters,
+    );
+    final write = existing.isEmpty
+        ? _collection._sqlInsert(data)
+        : _sqlUpdate(Map.of(data)..remove(_collection.idField));
+    return transaction.query(write.statement, parameters: write.parameters);
   }
 
   /// Updates fields on this document/row.
@@ -543,10 +583,7 @@ final class AnySqlDocumentReference {
         .where((field) => field != _collection.idField)
         .map((field) {
           final column = builder.identifier(field);
-          return switch (_collection._dialect) {
-            AnySqlDialect.mysql => '$column = values($column)',
-            _ => '$column = excluded.$column',
-          };
+          return '$column = excluded.$column';
         })
         .join(', ');
 
@@ -557,9 +594,6 @@ final class AnySqlDocumentReference {
       AnySqlDialect.postgres =>
         'insert into $table ($columns) values ($values) '
             'on conflict ($idColumn) do update set $updateColumns',
-      AnySqlDialect.mysql =>
-        'insert into $table ($columns) values ($values) '
-            'on duplicate key update $updateColumns',
       _ => throw const AnySqlException('Unsupported SQL dialect.'),
     };
 

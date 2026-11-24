@@ -1,3 +1,20 @@
+## 1.0.2
+
+- MySQL document `set()` locks and writes by document ID. It requires a
+  transaction-capable connection and a unique ID field.
+- MongoDB inserts accept immutable input documents and return generated IDs.
+- SQLite and PostgreSQL transactions report errors when a caught query failure
+  causes the database to roll back the transaction.
+- PostgreSQL and MySQL verify certificates when TLS is enabled. Configure
+  `options['securityContext']` for private trust roots.
+- MySQL now uses `mysql_dart`. Callers constructing `MysqlAnySqlConnection`
+  directly should pass a `mysql_dart.MySQLConnection`.
+- Documented replacement, partial update, and insert requirements for
+  `doc(id).set()` by database.
+- Split runnable examples into direct SQL, keyword store, transactions, HTTP
+  backend, and custom driver examples. The Example guide includes the
+  `anysql_options.dart` setup workflow.
+
 ## 1.0.1
 
 ### Fixed

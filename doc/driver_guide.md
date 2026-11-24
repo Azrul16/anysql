@@ -149,6 +149,10 @@ driver error attached as `cause`.
 
 ## PostgreSQL
 
+For PostgreSQL and MySQL, `sslEnabled: true` verifies the server certificate
+and hostname. For a private CA, pass a Dart `SecurityContext` with that CA
+configured in `options['securityContext']`.
+
 PostgreSQL uses named parameters through `package:postgres`:
 
 ```dart
@@ -173,7 +177,7 @@ connection fails with `AnySqlConnectionException`.
 
 ## MySQL
 
-MySQL uses the placeholder behavior from `package:mysql_client`:
+MySQL uses the placeholder behavior from `package:mysql_dart`:
 
 ```dart
 final connection = await AnySql.connect(
@@ -302,7 +306,7 @@ live integration tests require external database servers and credentials.
 The built-in drivers are intentionally adapters, not a full ORM or query
 builder. Packages such as Drift focus on reactive, type-safe SQLite
 persistence; packages such as Laconic focus on fluent SQL building; and direct
-drivers such as `postgres`, `mysql_client`, `sqlite3`, and `mongo_dart` expose
+drivers such as `postgres`, `mysql_dart`, `sqlite3`, and `mongo_dart` expose
 database-specific behavior directly. `anysql` sits underneath those kinds of
 choices as a small common contract for configuration, connection lifetime,
 results, backend proxy access, and driver swapping.

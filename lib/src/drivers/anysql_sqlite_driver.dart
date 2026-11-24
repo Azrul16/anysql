@@ -112,6 +112,7 @@ final class SqliteAnySqlConnection implements AnySqlConnection {
 
       try {
         final value = await action(transaction);
+        transaction.checkForUnexpectedEnd();
         if (!transaction.isCompleted) {
           await transaction.commit();
         }
@@ -139,6 +140,13 @@ final class _SqliteAnySqlTransaction implements AnySqlTransaction {
 
   final sqlite.Database _database;
   var isCompleted = false;
+  (AnySqlQueryException, StackTrace)? _unexpectedEnd;
+
+  void checkForUnexpectedEnd() {
+    if (_unexpectedEnd case (final error, final stack)) {
+      Error.throwWithStackTrace(error, stack);
+    }
+  }
 
   @override
   Future<void> commit() async {
@@ -167,12 +175,28 @@ final class _SqliteAnySqlTransaction implements AnySqlTransaction {
       return _sqliteQuery(_database, statement, _sqliteParameters(parameters));
     } on AnySqlException {
       rethrow;
-    } on Object catch (error) {
-      throw AnySqlQueryException(
+    } on Object catch (error, stack) {
+      final wrapped = AnySqlQueryException(
         'Failed to execute SQLite transaction query: '
         '${statementPreview(statement)}',
         error,
       );
+      if (_database.autocommit) {
+        _unexpectedEnd = (wrapped, stack);
+      }
+      Error.throwWithStackTrace(wrapped, stack);
+    } finally {
+      // SQLite can end the transaction itself, such as on a constraint
+      // violation with the ROLLBACK conflict policy.
+      isCompleted = _database.autocommit;
+      if (isCompleted) {
+        _unexpectedEnd ??= (
+          const AnySqlQueryException(
+            'The SQLite transaction ended during a query.',
+          ),
+          StackTrace.current,
+        );
+      }
     }
   }
 
