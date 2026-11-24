@@ -15,6 +15,8 @@ import 'anysql_result.dart';
 /// body includes the query statement, parameters, and non-secret config
 /// metadata: host, port, database, username, and sslEnabled. Database passwords
 /// and driver-specific options are excluded from config metadata.
+/// Query parameters must be JSON-encodable. Convert values such as DateTime
+/// to the representation expected by your endpoint before calling query().
 ///
 /// Expected response body:
 ///
@@ -115,6 +117,12 @@ final class _AnySqlHttpBackendConnection implements AnySqlConnection {
       }
 
       return _decodeResult(response.body);
+    } on JsonUnsupportedObjectError catch (error) {
+      throw AnySqlQueryException(
+        'HTTP backend parameters must be JSON-encodable. '
+        'Convert unsupported values before calling query().',
+        error,
+      );
     } on AnySqlException {
       rethrow;
     } on Object catch (error) {

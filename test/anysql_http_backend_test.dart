@@ -6,6 +6,34 @@ import 'package:http/testing.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test(
+    'http backend reports unsupported parameter values before sending',
+    () async {
+      final client = MockClient(
+        (_) async => fail('No request should be sent.'),
+      );
+      addTearDown(client.close);
+      final connection = await AnySqlHttpBackendClient(client: client).connect(
+        AnySqlOptions(
+          config: AnySqlConfig.sqlite(database: ':memory:'),
+          backendUri: Uri.parse('https://api.example.com/anysql'),
+        ),
+      );
+      addTearDown(connection.close);
+
+      await expectLater(
+        connection.query('byDate', parameters: {'date': DateTime.utc(2026)}),
+        throwsA(
+          isA<AnySqlQueryException>().having(
+            (error) => error.message,
+            'message',
+            contains('parameters must be JSON-encodable'),
+          ),
+        ),
+      );
+    },
+  );
+
   test('http backend sends query requests and decodes results', () async {
     late http.Request capturedRequest;
     final client = MockClient((request) async {

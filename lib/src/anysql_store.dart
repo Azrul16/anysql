@@ -115,8 +115,11 @@ final class AnySqlCollectionReference {
   /// Field/column used by [doc].
   final String idField;
 
-  /// Returns a document/row reference by [id].
+  /// Returns a document/row reference by a non-null [id].
   AnySqlDocumentReference doc(Object? id) {
+    if (id == null) {
+      throw const AnySqlQueryException('Document ID cannot be null.');
+    }
     return AnySqlDocumentReference._(collection: this, id: id);
   }
 
@@ -271,7 +274,7 @@ final class AnySqlCollectionReference {
 
   /// Executes this query and returns the first row/document, or `null`.
   Future<Map<String, Object?>?> first() async {
-    return (await limit(1).get()).firstOrNull;
+    return (await (_limit == 0 ? this : limit(1)).get()).firstOrNull;
   }
 
   /// Returns the number of rows/documents matching this query's filters.
@@ -458,7 +461,10 @@ final class AnySqlDocumentReference {
 
   /// Reads this document/row.
   Future<AnySqlResult> get() {
-    return _collection.where(_collection.idField, isEqualTo: id).limit(1).get();
+    return _collection
+        .where(_collection.idField, isEqualTo: id)
+        .limit(_collection._limit == 0 ? 0 : 1)
+        .get();
   }
 
   /// Reads this document/row and returns the first row/document, or `null`.
@@ -476,7 +482,9 @@ final class AnySqlDocumentReference {
   ///
   /// MySQL requires a transaction-capable connection and a unique
   /// [AnySqlCollectionReference.idField].
+  /// Document writes require a reference from an unfiltered collection.
   Future<AnySqlResult> set(Map<String, Object?> data) {
+    _checkWritable();
     final checkedData = _checkedData({...data, _collection.idField: id});
     if (checkedData.length == 1) {
       throw const AnySqlException('set requires at least one data field.');
@@ -532,7 +540,9 @@ final class AnySqlDocumentReference {
   }
 
   /// Updates fields on this document/row.
+  /// Document writes require a reference from an unfiltered collection.
   Future<AnySqlResult> update(Map<String, Object?> data) {
+    _checkWritable();
     final checkedData = _checkedData(data);
     if (checkedData.isEmpty) {
       throw const AnySqlException('update requires at least one field.');
@@ -556,7 +566,9 @@ final class AnySqlDocumentReference {
   }
 
   /// Deletes this document/row.
+  /// Document writes require a reference from an unfiltered collection.
   Future<AnySqlResult> delete() {
+    _checkWritable();
     return switch (_collection._dialect) {
       AnySqlDialect.mongodb => _collection._executor.query(
         '${_collection.name}.deleteOne',
@@ -571,6 +583,14 @@ final class AnySqlDocumentReference {
         'AnySqlStore does not know how to compile custom dialect deletes.',
       ),
     };
+  }
+
+  void _checkWritable() {
+    if (_collection._filters.isNotEmpty) {
+      throw const AnySqlQueryException(
+        'Document writes require an unfiltered collection reference.',
+      );
+    }
   }
 
   _SqlCommand _sqlSet(Map<String, Object?> data) {
@@ -783,6 +803,13 @@ List<Map<String, Object?>> _mongoPipeline({
   required int? limit,
   required int? offset,
 }) {
+  if (limit == 0) {
+    return [
+      {
+        r'$match': {r'$expr': false},
+      },
+    ];
+  }
   return [
     if (filters.isNotEmpty) {'\$match': _mongoFilter(filters)},
     if (orders.isNotEmpty)

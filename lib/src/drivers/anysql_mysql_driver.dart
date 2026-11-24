@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:mysql_dart/exception.dart' as mysql;
 import 'package:mysql_dart/mysql_dart.dart' as mysql;
 
 import '../anysql_config.dart';
@@ -161,6 +162,7 @@ final class MysqlAnySqlConnection implements AnySqlConnection {
 
       try {
         final value = await action(transaction);
+        transaction.checkForDeadlock();
         if (!transaction.isCompleted) {
           await transaction.commit();
         }
@@ -188,6 +190,13 @@ final class _MysqlAnySqlTransaction implements AnySqlTransaction {
 
   final mysql.MySQLConnection _connection;
   var isCompleted = false;
+  (AnySqlQueryException, StackTrace)? _deadlock;
+
+  void checkForDeadlock() {
+    if (_deadlock case (final error, final stackTrace)) {
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+  }
 
   @override
   Future<void> commit() async {
@@ -221,12 +230,18 @@ final class _MysqlAnySqlTransaction implements AnySqlTransaction {
       return _mysqlResult(result);
     } on AnySqlException {
       rethrow;
-    } on Object catch (error) {
-      throw AnySqlQueryException(
+    } on Object catch (error, stackTrace) {
+      final wrapped = AnySqlQueryException(
         'Failed to execute MySQL transaction query: '
         '${statementPreview(statement)}',
         error,
       );
+      if (error is mysql.MySQLServerException && error.errorCode == 1213) {
+        // InnoDB has already rolled back the entire transaction.
+        isCompleted = true;
+        _deadlock = (wrapped, stackTrace);
+      }
+      Error.throwWithStackTrace(wrapped, stackTrace);
     }
   }
 

@@ -222,6 +222,44 @@ void main() {
     });
   });
 
+  test('MongoDB zero limit compiles to an empty aggregate', () async {
+    final connection = _RecordingConnection();
+    final users = AnySqlStore(
+      connection,
+      dialect: AnySqlDialect.mongodb,
+    ).collection('users').limit(0);
+
+    expect((await users.get()).rows, isEmpty);
+    expect(await users.first(), isNull);
+    expect(await users.doc(1).first(), isNull);
+    expect(connection.lastStatement, 'users.aggregate');
+    expect(connection.lastParameters, {
+      'pipeline': [
+        {
+          r'$match': {r'$expr': false},
+        },
+      ],
+    });
+  });
+
+  test('document writes reject filtered references and null IDs', () {
+    for (final dialect in AnySqlDialect.values) {
+      final connection = _RecordingConnection();
+      final users = AnySqlStore(
+        connection,
+        dialect: dialect,
+      ).collection('users');
+      final filtered = users.where('active', isEqualTo: true).doc(1);
+      final queryError = throwsA(isA<AnySqlQueryException>());
+
+      expect(() => users.doc(null), queryError);
+      expect(() => filtered.set({'name': 'Ada'}), queryError);
+      expect(() => filtered.update({'name': 'Ada'}), queryError);
+      expect(filtered.delete, queryError);
+      expect(connection.statements, isEmpty);
+    }
+  });
+
   test('store validates identifiers before building commands', () async {
     final store = AnySqlStore(
       _RecordingConnection(),

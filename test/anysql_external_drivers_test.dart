@@ -128,6 +128,38 @@ void main() {
           await documents.where('anysqlTestRun', isEqualTo: marker).count(),
           3,
         );
+        expect((await documents.limit(0).get()).rows, isEmpty);
+        expect(await documents.limit(0).first(), isNull);
+
+        await expectLater(
+          documents.add({
+            '_id': inserted.lastInsertId,
+            'anysqlTestRun': marker,
+          }),
+          throwsA(
+            isA<AnySqlQueryException>().having(
+              (error) => error.cause,
+              'write failure details',
+              containsPair('writeErrors', 1),
+            ),
+          ),
+        );
+        await expectLater(
+          documents.addAll([
+            {'_id': 'anysql-$marker', 'anysqlTestRun': marker},
+            {'_id': inserted.lastInsertId, 'anysqlTestRun': marker},
+          ]),
+          throwsA(
+            isA<AnySqlQueryException>().having(
+              (error) => error.cause,
+              'partial write details',
+              allOf(
+                containsPair('inserted', 1),
+                containsPair('writeErrors', 1),
+              ),
+            ),
+          ),
+        );
       } finally {
         await connection.query(
           'anysql_smoke.deleteMany',

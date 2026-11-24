@@ -1,7 +1,8 @@
 name: anysql
 description: >-
+  After installing, run dart run anysql to generate lib/anysql_options.dart.
   Firebase-style API for SQL and MongoDB with direct drivers and an HTTP backend.
-version: 1.0.3
+version: 1.0.4
 repository: https://github.com/Azrul16/anysql
 issue_tracker: https://github.com/Azrul16/anysql/issues
 topics:

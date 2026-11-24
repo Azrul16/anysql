@@ -1,3 +1,25 @@
+## 1.0.4
+
+### Fixed
+
+- MongoDB write failures throw `AnySqlQueryException`. The cause includes
+  write counts and server responses for diagnosing partial bulk writes.
+- MySQL deadlocks invalidate the transaction executor and preserve the
+  original error even when the callback catches it.
+- Document writes reject filtered references before sending a command.
+  Document IDs must be non-null across all dialects.
+- Zero-limit reads return empty results, including `first()` and document
+  reads. MongoDB avoids an invalid zero-limit aggregation stage.
+- HTTP query parameters that cannot be encoded as JSON produce a clear
+  validation error before the request is sent.
+
+### Documentation
+
+- Restored the pub.dev Example tab with a complete SQLite walkthrough and
+  links to runnable examples by feature.
+- Rewrote the README around installation, setup, and driver-specific usage.
+  Added the setup command to the package metadata shown on Installing.
+
 ## 1.0.3
 
 - Consolidated installation, CLI setup, driver selection, and feature tutorials

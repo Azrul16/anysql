@@ -36,6 +36,10 @@ void main() {
       expect(activeUsers.rows, [
         {'id': 1, 'name': 'Ada', 'active': 1, 'score': 42},
       ]);
+      final emptyPage = store.collection('users').limit(0);
+      expect((await emptyPage.get()).rows, isEmpty);
+      expect(await emptyPage.first(), isNull);
+      expect(await emptyPage.doc(1).first(), isNull);
 
       await store.collection('users').doc(1).update({'score': 100});
       expect(await store.collection('users').doc(1).first(), contains('score'));

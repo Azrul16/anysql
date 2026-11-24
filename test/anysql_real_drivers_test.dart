@@ -1,8 +1,41 @@
 import 'package:anysql/anysql.dart';
 import 'package:anysql/anysql_drivers.dart';
+import 'package:mysql_dart/exception.dart' as mysql;
+import 'package:mysql_dart/mysql_dart.dart' as mysql;
 import 'package:test/test.dart';
 
 void main() {
+  test(
+    'mysql deadlocks invalidate the transaction and keep the original error',
+    () async {
+      final native = _DeadlockingMysqlConnection();
+      final connection = MysqlAnySqlConnection(native);
+      await expectLater(
+        connection.transaction((tx) async {
+          try {
+            await tx.query('update accounts set balance = 90 where id = 1');
+          } on AnySqlQueryException {
+            await expectLater(
+              tx.query('select 1'),
+              throwsA(isA<AnySqlConnectionException>()),
+            );
+          }
+        }),
+        throwsA(
+          isA<AnySqlQueryException>().having(
+            (error) => error.cause,
+            'cause',
+            same(native.deadlock),
+          ),
+        ),
+      );
+      expect(native.statements, [
+        'START TRANSACTION',
+        'update accounts set balance = 90 where id = 1',
+      ]);
+    },
+  );
+
   test('built-in drivers report supported dialects', () {
     final drivers = [
       (const PostgresAnySqlDriver(), AnySqlDialect.postgres),
@@ -395,4 +428,32 @@ AnySqlConfig _configFor(AnySqlDialect dialect) {
     ),
     AnySqlDialect.custom => AnySqlConfig(dialect: AnySqlDialect.custom),
   };
+}
+
+final class _DeadlockingMysqlConnection implements mysql.MySQLConnection {
+  final statements = <String>[];
+  final deadlock = const mysql.MySQLServerException('Deadlock found', 1213);
+
+  @override
+  bool get connected => true;
+
+  @override
+  Future<mysql.IResultSet> execute(
+    String statement, [
+    Object? parameters,
+    bool iterable = false,
+    Duration? queryTimeout,
+  ]) async {
+    statements.add(statement);
+    if (statement == 'START TRANSACTION') return _MysqlCommandResult();
+    throw deadlock;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+final class _MysqlCommandResult implements mysql.IResultSet {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

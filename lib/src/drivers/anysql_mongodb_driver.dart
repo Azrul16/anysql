@@ -227,7 +227,7 @@ final class _MongoStatement {
 }
 
 Map<String, Object?> _writeMetadata(dynamic result) {
-  return {
+  final metadata = <String, Object?>{
     'inserted': result.nInserted as int,
     'matched': result.nMatched as int,
     'modified': result.nModified as int,
@@ -237,6 +237,13 @@ Map<String, Object?> _writeMetadata(dynamic result) {
     'writeErrors': result.writeErrorsNumber as int,
     'serverResponses': result.serverResponses as List<Map<String, dynamic>>,
   };
+  if (!result.isSuccess) {
+    throw AnySqlQueryException(
+      'MongoDB write did not fully succeed.',
+      metadata,
+    );
+  }
+  return metadata;
 }
 
 String _mongoUri(AnySqlConfig config) {
