@@ -1,6 +1,6 @@
 import 'package:anysql/anysql.dart';
 import 'package:anysql/anysql_drivers.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,5 +20,10 @@ Future<void> main() async {
     ),
   );
   await backend.close();
-  runApp(const MaterialApp(home: Scaffold(body: Text('AnySQL ready'))));
+  runApp(
+    const Directionality(
+      textDirection: TextDirection.ltr,
+      child: Center(child: Text('AnySQL ready')),
+    ),
+  );
 }
