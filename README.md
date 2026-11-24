@@ -20,7 +20,22 @@ instead of writing raw SQL or MongoDB commands in every feature.
 > normally call a secure backend API instead of shipping production database
 > credentials inside the app.
 
-## Version 1.0.2
+## Contents
+
+- [Install and generate options](#quick-start)
+- [Run your first SQLite query](#try-it-now)
+- [Choose a connection for your app](#choose-a-connection)
+- [Read and write with the keyword API](#keyword-store-api)
+- [Configure a database](#generate-an-options-file)
+- [Use an HTTP backend from Flutter](#flutter-mobile-and-backend-access)
+- [Compare drivers](#driver-capability-matrix)
+- [Run raw queries](#raw-query-escape-hatch) and [use transactions](#transactions)
+- [Register multiple or custom drivers](#register-multiple-drivers)
+- [Use the CLI](#cli-reference)
+- [Troubleshoot](#common-errors-users-hit)
+- [Run examples by feature](#runnable-examples)
+
+## Compatibility
 
 Requires Dart 3.10 or newer. Native Flutter targets are Android, iOS, Linux,
 macOS, and Windows; browser/web support is not advertised. CI builds a Flutter
@@ -57,14 +72,15 @@ Or add the current release directly to `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  anysql: ^1.0.2
+  anysql: ^1.0.3
 ```
 
 Then run `dart pub get` or `flutter pub get`. Import the core API from
 `package:anysql/anysql.dart`; trusted applications that connect directly also
 import `package:anysql/anysql_drivers.dart`.
 
-Create `lib/anysql_options.dart`:
+From your app's root directory, where its `pubspec.yaml` lives, run the setup
+wizard to create `lib/anysql_options.dart`:
 
 ```sh
 dart run anysql
@@ -79,11 +95,13 @@ The setup command asks which database you want:
 4. MongoDB
 ```
 
-Then it generates one focused options file for that database. Edit the values
-in the generated file, then connect.
+Press Enter to select PostgreSQL, or enter a number or database name. The
+wizard writes one configuration with a `DefaultAnySqlOptions` class. Open the
+file and set the values for your database. The wizard creates configuration
+code. Your app opens the database when it calls a connection helper.
 
-If you selected SQLite, connect from trusted Dart code such as a server, CLI,
-worker, or test like this:
+If you selected SQLite, create `lib/quick_start.dart` beside the generated
+options file. This example creates a table and runs a keyword-store query.
 
 ```dart
 import 'package:anysql/anysql.dart';
@@ -94,12 +112,20 @@ import 'anysql_options.dart';
 Future<void> main() async {
   final users = await DefaultAnySqlOptions.withStore(
     driver: const SqliteAnySqlDriver(),
-    action: (db) => db.collection('users').limit(20).get(),
+    action: (db) async {
+      await db.connection.query(
+        'create table if not exists users (id integer primary key, email text)',
+      );
+      return db.collection('users').limit(20).get();
+    },
   );
 
   print(users.rows);
 }
 ```
+
+Run it with `dart run lib/quick_start.dart`. A new database returns an empty
+list. The in-memory tutorial below shows how to insert and read a record.
 
 For Flutter apps, keep database credentials on your backend and connect through
 your API:
@@ -169,6 +195,19 @@ Output:
 [{id: 1, email: ada@example.com, active: 1}]
 ```
 
+## Choose a connection
+
+| Your app | Start here | Where the database lives |
+| --- | --- | --- |
+| Dart CLI, test, or local Flutter app storing data on the device | SQLite driver | In memory or in a writable file |
+| Server, worker, or CLI connecting to an existing database | Direct PostgreSQL, MySQL, or MongoDB driver | On your database server |
+| Flutter app accessing shared data | HTTP backend client | Behind your application server |
+| App using another database or protocol | Custom driver or backend client | Wherever your adapter connects |
+
+Use the keyword store for collection reads and simple writes. Use the same
+connection's `query()` for database-specific statements, schema changes, or
+queries that need joins.
+
 ## Keyword Store API
 
 `AnySqlStore` gives `anysql` a Firebase-like API while keeping the package
@@ -237,6 +276,45 @@ server-side command that runs the operation on a direct MySQL connection.
 SQL identifiers are validated before commands are built. Collection/table and
 field names must use letters, numbers, and underscores, starting with a letter
 or underscore.
+
+### Read one record or a page
+
+```dart
+final users = db.collection('users');
+final user = await users.doc(1).first();
+if (user != null) {
+  print(user['email']);
+}
+
+final page = await users
+    .select(['id', 'email'])
+    .orderBy('id')
+    .limit(20)
+    .offset(20)
+    .get();
+print(page.rows);
+```
+
+`first()` returns `null` when no record matches. Sort by a unique field such
+as `id` to give paginated results a stable order. Use chained `where()`
+calls to combine filters with AND. `count()` and `exists()` use the filters
+without applying the page's limit or offset.
+
+### Insert multiple records
+
+```dart
+final result = await db.collection('users').addAll([
+  {'email': 'ada@example.com', 'active': true},
+  {'email': 'grace@example.com', 'active': false},
+]);
+print(result.affectedRows);
+```
+
+Use the same fields in each record. Drivers differ in what they can report
+about generated IDs and affected rows. Use SQL `RETURNING` on drivers that
+declare `returningRows` when you need the values produced by a write. With
+MongoDB, pass `idField: '_id'` to `collection()` when looking up documents
+by the generated MongoDB ID.
 
 ## What This Package Includes
 
@@ -496,6 +574,31 @@ final connection = await AnySql.connect(
 
 MySQL parameter behavior follows `package:mysql_dart`.
 
+### TLS for PostgreSQL and MySQL
+
+Set `sslEnabled: true` to require TLS and verify the server certificate and
+hostname. Use the hostname on the certificate. If your database uses a
+private certificate authority, configure its certificate in a Dart
+`SecurityContext` and pass it through the driver options:
+
+```dart
+import 'dart:io';
+
+import 'package:anysql/anysql.dart';
+
+final trust = SecurityContext(withTrustedRoots: true)
+  ..setTrustedCertificates('db-ca.pem');
+
+final config = AnySqlConfig.postgres(
+  host: 'db.example.com',
+  database: 'app',
+  sslEnabled: true,
+  options: {'securityContext': trust},
+);
+```
+
+Use the same `sslEnabled` and `options` fields on `AnySqlConfig.mysql`.
+
 ### MongoDB
 
 ```dart
@@ -571,6 +674,15 @@ final connection = await anySql.open(
 
 ## CLI Reference
 
+Run the following commands from the application directory. To use the same
+wizard from a globally installed CLI, activate it once and then run it in the
+application directory:
+
+```sh
+dart pub global activate anysql
+dart pub global run anysql
+```
+
 Create one options file interactively:
 
 ```sh
@@ -632,19 +744,30 @@ dart run anysql --help
 - A generated file already exists: re-run the command with `--force` only when
   you really want to overwrite it.
 
-## More Documentation
+## Runnable examples
+
+From a checkout of the [AnySQL repository](https://github.com/Azrul16/anysql),
+run `dart pub get` once. Pick a standalone program based on what you want to
+learn.
+
+| Use case | Run from the repository root |
+| --- | --- |
+| Connect directly, bind SQL parameters, and read insert results | `dart run tool/examples/direct_queries.dart` |
+| Insert and filter rows with the keyword store | `dart run tool/examples/keyword_store.dart` |
+| Update two accounts within one transaction | `dart run tool/examples/transactions.dart` |
+| Send a request through the HTTP client and inspect the JSON | `dart run tool/examples/http_backend.dart` |
+| Implement and register a custom driver | `dart run tool/examples/custom_driver.dart` |
+
+The direct SQL, keyword store, and transaction programs use in-memory SQLite.
+The HTTP example simulates its server locally, and the custom driver example
+uses an in-process adapter. Run `dart run tool/examples/run_all.dart` to try
+them together.
+
+## More documentation
 
 See the
 [driver guide](https://github.com/Azrul16/anysql/blob/main/doc/driver_guide.md)
 for longer direct-driver documentation.
-
-See the
-[runnable examples by feature](https://github.com/Azrul16/anysql/tree/main/example)
-that covers:
-
-- a fake direct PostgreSQL-style driver,
-- a fake backend/proxy client,
-- a real in-memory SQLite database.
 
 ## Reliability Notes
 

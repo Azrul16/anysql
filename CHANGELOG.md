@@ -1,3 +1,10 @@
+## 1.0.3
+
+- Consolidated installation, CLI setup, driver selection, and feature tutorials
+  into the README.
+- Moved runnable programs to `tool/examples/` and removed the separate pub.dev
+  Example tab. Pub.dev continues to generate its standard Installing tab.
+
 ## 1.0.2
 
 - MySQL document `set()` locks and writes by document ID. It requires a
